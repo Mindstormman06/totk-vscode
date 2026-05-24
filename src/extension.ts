@@ -7,6 +7,7 @@ import {
     getCachedPythonExecutable,
     promptPythonSetup,
 } from './pythonEnv';
+import { registerSyntaxColorSync } from './syntaxColors';
 
 const ARCHIVE_FILE_PATTERN = /\.(pack|sarc)(\.zs)?$/i;
 
@@ -297,6 +298,8 @@ class SarcProvider implements vscode.FileSystemProvider {
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('TOTK Editor is now active!');
+
+    registerSyntaxColorSync(context);
 
     const bridgePath = path.join(context.extensionPath, 'totk_bridge.py');
     const getPython = () => getCachedPythonExecutable() ?? '';

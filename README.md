@@ -4,6 +4,7 @@ VS Code support for editing **Tears of the Kingdom** modding files inside decomp
 
 ## Features
 
+- Customizable syntax colors for BYML / BGYML / MSBT (Settings → **TOTK Editor**)
 - Browse `.pack` / `.sarc` archives (including `.zs` compressed) as folders
 - Edit `.byml` / `.bgyml` as text
 - Edit `.msbt` message files as `label: text` lines
@@ -19,6 +20,22 @@ You need **decompressed** romfs/data on disk (not ROM or single compressed archi
 4. Open a folder that contains your extracted game files, or run **TOTK: Open SARC Archive**.
 
 If setup fails, run **TOTK: Set Up Python Environment** from the Command Palette, or set `totk-editor.pythonPath` to your `python.exe`.
+
+## Syntax colors
+
+Open Settings and search **TOTK Editor**. Each token type has a color picker:
+
+| Setting | What it colors |
+|--------|----------------|
+| `colors.tag` | Keys / labels (before `:`) |
+| `colors.string` | String values |
+| `colors.number` | Numbers |
+| `colors.boolean` | `true`, `false`, `null` |
+| `colors.punctuation` | `:`, list `-` |
+| `colors.msbtCommand` | `{cmd:...}` tags in MSBT |
+| `colors.comment` | `#` comments |
+
+Turn off **Colors: Enabled** to stop applying TOTK colors. Use **TOTK: Reset Syntax Colors to Defaults** to restore the built-in palette.
 
 ## Bundle and share (`.vsix`)
 

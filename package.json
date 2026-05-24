@@ -16,7 +16,8 @@
     "workspaceContains:**/*.sarc",
     "onFileSystem:sarc",
     "onCommand:totk-editor.openPack",
-    "onCommand:totk-editor.setupPython"
+    "onCommand:totk-editor.setupPython",
+    "onCommand:totk-editor.resetColors"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -101,6 +102,10 @@
       {
         "command": "totk-editor.setupPython",
         "title": "TOTK: Set Up Python Environment"
+      },
+      {
+        "command": "totk-editor.resetColors",
+        "title": "TOTK: Reset Syntax Colors to Defaults"
       }
     ],
     "configuration": {
@@ -110,6 +115,53 @@
           "type": "string",
           "default": "",
           "markdownDescription": "Optional path to a Python 3.10+ executable used to create the extension's bundled virtual environment. Leave empty to auto-detect (`py`, `python3`, etc.)."
+        },
+        "totk-editor.colors.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Apply TOTK Editor syntax colors to BYML, BGYML, and MSBT files."
+        },
+        "totk-editor.colors.tag": {
+          "type": "string",
+          "default": "#9CDCFE",
+          "description": "Keys and labels (text before the colon).",
+          "format": "color"
+        },
+        "totk-editor.colors.string": {
+          "type": "string",
+          "default": "#CE9178",
+          "description": "String values.",
+          "format": "color"
+        },
+        "totk-editor.colors.number": {
+          "type": "string",
+          "default": "#B5CEA8",
+          "description": "Numeric values.",
+          "format": "color"
+        },
+        "totk-editor.colors.boolean": {
+          "type": "string",
+          "default": "#569CD6",
+          "description": "Boolean and null literals.",
+          "format": "color"
+        },
+        "totk-editor.colors.punctuation": {
+          "type": "string",
+          "default": "#D4D4D4",
+          "description": "Colons, list dashes, and other punctuation.",
+          "format": "color"
+        },
+        "totk-editor.colors.msbtCommand": {
+          "type": "string",
+          "default": "#C586C0",
+          "description": "Inline MSBT control tags ({cmd:...}).",
+          "format": "color"
+        },
+        "totk-editor.colors.comment": {
+          "type": "string",
+          "default": "#6A9955",
+          "description": "Line comments (# ...).",
+          "format": "color"
         }
       }
     },
@@ -122,168 +174,15 @@
       },
       "[byml]": {
         "editor.insertSpaces": true,
-        "editor.tabSize": 2,
-        "editor.tokenColorCustomizations": {
-          "textMateRules": [
-            {
-              "scope": [
-                "entity.name.tag.byml",
-                "source.byml entity.name.tag"
-              ],
-              "settings": {
-                "foreground": "#9CDCFE"
-              }
-            },
-            {
-              "scope": [
-                "string.unquoted.byml",
-                "string.quoted.double.byml",
-                "source.byml string.unquoted",
-                "source.byml string.quoted.double"
-              ],
-              "settings": {
-                "foreground": "#CE9178"
-              }
-            },
-            {
-              "scope": [
-                "constant.numeric.byml",
-                "source.byml constant.numeric"
-              ],
-              "settings": {
-                "foreground": "#B5CEA8"
-              }
-            },
-            {
-              "scope": [
-                "constant.language.boolean.byml",
-                "constant.language.null.byml"
-              ],
-              "settings": {
-                "foreground": "#569CD6"
-              }
-            },
-            {
-              "scope": [
-                "punctuation.definition.list.begin.byml",
-                "punctuation.separator.key-value.byml"
-              ],
-              "settings": {
-                "foreground": "#D4D4D4"
-              }
-            }
-          ]
-        }
+        "editor.tabSize": 2
       },
       "[bgyml]": {
         "editor.insertSpaces": true,
-        "editor.tabSize": 2,
-        "editor.tokenColorCustomizations": {
-          "textMateRules": [
-            {
-              "scope": [
-                "entity.name.tag.byml",
-                "source.byml entity.name.tag"
-              ],
-              "settings": {
-                "foreground": "#9CDCFE"
-              }
-            },
-            {
-              "scope": [
-                "string.unquoted.byml",
-                "string.quoted.double.byml",
-                "source.byml string.unquoted",
-                "source.byml string.quoted.double"
-              ],
-              "settings": {
-                "foreground": "#CE9178"
-              }
-            },
-            {
-              "scope": [
-                "constant.numeric.byml",
-                "source.byml constant.numeric"
-              ],
-              "settings": {
-                "foreground": "#B5CEA8"
-              }
-            },
-            {
-              "scope": [
-                "constant.language.boolean.byml",
-                "constant.language.null.byml"
-              ],
-              "settings": {
-                "foreground": "#569CD6"
-              }
-            },
-            {
-              "scope": [
-                "punctuation.definition.list.begin.byml",
-                "punctuation.separator.key-value.byml"
-              ],
-              "settings": {
-                "foreground": "#D4D4D4"
-              }
-            }
-          ]
-        }
+        "editor.tabSize": 2
       },
       "[msbt]": {
         "editor.insertSpaces": true,
-        "editor.tabSize": 2,
-        "editor.tokenColorCustomizations": {
-          "textMateRules": [
-            {
-              "scope": [
-                "entity.name.tag.byml",
-                "source.byml entity.name.tag"
-              ],
-              "settings": {
-                "foreground": "#9CDCFE"
-              }
-            },
-            {
-              "scope": [
-                "string.unquoted.byml",
-                "string.quoted.double.byml",
-                "source.byml string.unquoted",
-                "source.byml string.quoted.double"
-              ],
-              "settings": {
-                "foreground": "#CE9178"
-              }
-            },
-            {
-              "scope": [
-                "constant.numeric.byml",
-                "source.byml constant.numeric"
-              ],
-              "settings": {
-                "foreground": "#B5CEA8"
-              }
-            },
-            {
-              "scope": [
-                "constant.language.boolean.byml",
-                "constant.language.null.byml"
-              ],
-              "settings": {
-                "foreground": "#569CD6"
-              }
-            },
-            {
-              "scope": [
-                "punctuation.definition.list.begin.byml",
-                "punctuation.separator.key-value.byml"
-              ],
-              "settings": {
-                "foreground": "#D4D4D4"
-              }
-            }
-          ]
-        }
+        "editor.tabSize": 2
       }
     }
   },
