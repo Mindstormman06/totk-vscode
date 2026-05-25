@@ -11,12 +11,18 @@ from pathlib import Path
 import oead
 import zstandard as zstd
 
-_ASB_TOOLKIT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vendor', 'asb-toolkit')
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_ASB_TOOLKIT_DIRS = [
+    _SCRIPT_DIR / 'vendor' / 'asb-toolkit',
+    _SCRIPT_DIR.parent / 'vendor' / 'asb-toolkit',
+]
 
 
 def _ensure_asb_toolkit_on_path() -> None:
-    if _ASB_TOOLKIT_DIR not in sys.path:
-        sys.path.insert(0, _ASB_TOOLKIT_DIR)
+    for toolkit_dir in _ASB_TOOLKIT_DIRS:
+        toolkit_str = str(toolkit_dir)
+        if toolkit_dir.is_dir() and toolkit_str not in sys.path:
+            sys.path.insert(0, toolkit_str)
 
 
 @contextmanager

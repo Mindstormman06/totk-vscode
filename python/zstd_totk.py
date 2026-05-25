@@ -22,10 +22,15 @@ def zsdic_pack_path(romfs_path: str) -> str:
 
 
 def _ensure_vendor_zstd() -> None:
-    vendor = Path(__file__).parent / 'vendor' / 'asb-toolkit'
-    vendor_str = str(vendor)
-    if vendor_str not in sys.path:
-        sys.path.insert(0, vendor_str)
+    script_dir = Path(__file__).resolve().parent
+    candidates = [
+        script_dir / 'vendor' / 'asb-toolkit',
+        script_dir.parent / 'vendor' / 'asb-toolkit',
+    ]
+    for vendor in candidates:
+        vendor_str = str(vendor)
+        if vendor.is_dir() and vendor_str not in sys.path:
+            sys.path.insert(0, vendor_str)
 
 
 @lru_cache(maxsize=4)

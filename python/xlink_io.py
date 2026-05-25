@@ -8,7 +8,7 @@ from pathlib import Path
 from zstd_totk import compress_container, decompress_container, zsdic_pack_path
 
 _ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
-_EXTENSION_ROOT = Path(__file__).parent
+_SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def is_xlnk_extension(logical_path: str) -> bool:
@@ -36,9 +36,12 @@ def find_xlink_tool() -> str:
         raise FileNotFoundError(f'TOTK_XLINK_TOOL is not a file: {override}')
 
     name = 'xlink_tool.exe' if os.name == 'nt' else 'xlink_tool'
-    bundled = _EXTENSION_ROOT / 'vendor' / 'xlink2' / name
-    if bundled.is_file():
-        return str(bundled)
+    for bundled in [
+        _SCRIPT_DIR / 'vendor' / 'xlink2' / name,
+        _SCRIPT_DIR.parent / 'vendor' / 'xlink2' / name,
+    ]:
+        if bundled.is_file():
+            return str(bundled)
 
     raise FileNotFoundError(
         'xlink_tool not found. Install dt-12345/xlink2 and set TOTK_XLINK_TOOL, '

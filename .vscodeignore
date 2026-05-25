@@ -16,3 +16,4 @@ images/
 **/__pycache__/**
 **/*.pyc
 **/.git/**
+icons/*.ai
