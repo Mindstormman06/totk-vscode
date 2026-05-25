@@ -4,6 +4,14 @@
   "displayName": "totk-vscode",
   "description": "Edits TOTK archives, BYML, AAMP (many extensions), MSBT, ASB, BAEV, and XLNK (.belnk / .bslnk) files",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mindstormman06/totk-vscode.git"
+  },
+  "homepage": "https://github.com/Mindstormman06/totk-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/Mindstormman06/totk-vscode/issues"
+  },
   "engines": {
     "vscode": "^1.120.0"
   },
