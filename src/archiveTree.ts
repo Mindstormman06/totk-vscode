@@ -36,6 +36,8 @@ export class ArchiveTreeItem extends vscode.TreeItem {
         }
         if (isArchiveFile(entryName)) {
             this.iconPath = new vscode.ThemeIcon('package');
+        } else if (isBntxTextureUri(resourceUri) && extensionUri) {
+            this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'bntx.svg');
         } else if (isTkprojFile(entryName) && extensionUri) {
             this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'tkproj.svg');
         }

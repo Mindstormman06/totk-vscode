@@ -58,7 +58,7 @@
     "iconThemes": [
       {
         "id": "totk-icons",
-        "label": "TOTK File Icons (partial — prefer your usual theme)",
+        "label": "TOTK File Icons",
         "path": "./icons/totk-icon-theme.json"
       }
     ],

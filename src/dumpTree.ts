@@ -7,6 +7,7 @@ import { resolveRomfsPath } from './romfs';
 
 export const DUMP_SCHEME = 'totk-dump';
 let dumpTreeView: vscode.TreeView<DumpTreeItem> | undefined;
+let extensionUri: vscode.Uri | undefined;
 
 export function toDumpUri(fileUri: vscode.Uri): vscode.Uri {
     return fileUri.with({ scheme: DUMP_SCHEME });
@@ -35,6 +36,8 @@ export class DumpTreeItem extends vscode.TreeItem {
 
         if (isArchiveFile(entryName)) {
             this.iconPath = new vscode.ThemeIcon('package');
+        } else if (isBntxTextureUri(resourceUri) && extensionUri) {
+            this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'bntx.svg');
         } else if (contextValue === 'dumpDir') {
             this.iconPath = new vscode.ThemeIcon('folder');
         }
@@ -118,6 +121,7 @@ export function registerGameDumpTree(
     context: vscode.ExtensionContext,
     archiveTree: ArchiveTreeProvider,
 ): GameDumpTreeProvider {
+    extensionUri = context.extensionUri;
     const provider = new GameDumpTreeProvider();
 
     const treeView = vscode.window.createTreeView('totk-editor.gameDump', {
