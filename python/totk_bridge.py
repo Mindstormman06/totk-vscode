@@ -506,6 +506,11 @@ def main():
         if command == 'ainb-defs':
             print(json.dumps(read_ainb_definitions(romfs_path)))
 
+        elif command == 'build-romfs-index':
+            from romfs_index import build_romfs_index
+            output_path = sys.argv[2]
+            print(json.dumps(build_romfs_index(romfs_path, output_path)))
+
         elif command == 'read-disk':
             file_path = sys.argv[2]
             file_data = Path(file_path).read_bytes()

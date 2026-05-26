@@ -539,6 +539,41 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const bridgePath = path.join(context.extensionPath, 'python', 'totk_bridge.py');
     const getPython = () => getCachedPythonExecutable() ?? '';
+    const romfsIndexPath = path.join(context.globalStorageUri.fsPath, 'romfs-index.txt');
+    let romfsIndexBuildPromise: Promise<void> | undefined;
+    let gameDumpTree: ReturnType<typeof registerGameDumpTree> | undefined;
+
+    const buildRomfsIndex = async (): Promise<void> => {
+        if (romfsIndexBuildPromise) {
+            return romfsIndexBuildPromise;
+        }
+        const romfsPath = resolveRomfsPath();
+        const pythonExe = getPython();
+        if (!romfsPath || !pythonExe || !gameDumpTree) {
+            return;
+        }
+
+        gameDumpTree.setExternalIndexBuilding(true);
+        romfsIndexBuildPromise = (async () => {
+            try {
+                await fs.promises.mkdir(context.globalStorageUri.fsPath, { recursive: true });
+                await runBridgeJsonAsync<{ path: string; count: number }>(
+                    pythonExe,
+                    bridgePath,
+                    ['build-romfs-index', romfsIndexPath],
+                    undefined,
+                    getBridgeEnv(),
+                );
+                gameDumpTree?.onExternalIndexUpdated();
+            } catch {
+                // Keep search functional with TypeScript fallback indexing.
+            } finally {
+                gameDumpTree?.setExternalIndexBuilding(false);
+                romfsIndexBuildPromise = undefined;
+            }
+        })();
+        return romfsIndexBuildPromise;
+    };
 
     const sarcProvider = new SarcProvider(bridgePath, getPython);
     context.subscriptions.push(
@@ -644,6 +679,7 @@ export async function activate(context: vscode.ExtensionContext) {
         const python = await ensurePythonEnvironment(context, true);
         if (python) {
             void vscode.window.showInformationMessage('TOTK Editor: Python environment is ready.');
+            void buildRomfsIndex();
         } else {
             await promptPythonSetup(context);
         }
@@ -652,21 +688,50 @@ export async function activate(context: vscode.ExtensionContext) {
         setupPython,
         vscode.commands.registerCommand('totk-editor.pickPython', () => pickDetectedPython(context)),
         vscode.commands.registerCommand('totk-editor.browsePython', () => browseForPython(context)),
+        vscode.commands.registerCommand('totk-editor.rebuildRomfsIndex', async () => {
+            const romfsPath = resolveRomfsPath();
+            if (!romfsPath) {
+                void vscode.window.showWarningMessage(
+                    'Set totk-editor.romfsPath before rebuilding the search index.',
+                );
+                return;
+            }
+            const python = getPython();
+            if (!python) {
+                await promptPythonSetup(context);
+                return;
+            }
+            void vscode.window.showInformationMessage('TOTK Editor: Rebuilding RomFS search index...');
+            await buildRomfsIndex();
+            void vscode.window.showInformationMessage('TOTK Editor: RomFS search index rebuilt.');
+        }),
     );
 
     // Start Python bootstrap in background so activation doesn't block the extension host.
     void ensurePythonEnvironment(context).then(async (python) => {
         if (!python) {
             await promptPythonSetup(context);
+            return;
         }
+        void buildRomfsIndex();
     });
 
     await migrateOffStandaloneIconTheme(context);
     registerIconThemeCommands(context);
 
     const archiveTree = registerArchiveTree(context);
-    registerGameDumpTree(context, archiveTree);
+    gameDumpTree = registerGameDumpTree(context, archiveTree);
+    gameDumpTree.setExternalIndexPath(romfsIndexPath);
     await migrateSarcWorkspaceFolders(archiveTree);
+    void buildRomfsIndex();
+
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration((event) => {
+            if (event.affectsConfiguration('totk-editor.romfsPath')) {
+                void buildRomfsIndex();
+            }
+        }),
+    );
 
     const exportFromArchiveSelection = async (
         sourceUris: vscode.Uri[],

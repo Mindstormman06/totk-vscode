@@ -283,6 +283,10 @@
         "title": "TOTK: Browse for python.exe"
       },
       {
+        "command": "totk-editor.rebuildRomfsIndex",
+        "title": "TOTK: Rebuild Game Dump Search Index"
+      },
+      {
         "command": "totk-editor.useTotkIcons",
         "title": "TOTK: File Icon Theme Help"
       },
@@ -323,6 +327,11 @@
         }
       ],
       "totk-editor-dump": [
+        {
+          "id": "totk-editor.gameDumpSearch",
+          "name": "Search",
+          "type": "webview"
+        },
         {
           "id": "totk-editor.gameDump",
           "name": "RomFS"

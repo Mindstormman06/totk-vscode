@@ -1,11 +1,13 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { addDumpEntryToProject, pickProjectRoot } from './addToProject';
 import { isArchiveFile, isBntxTextureUri, isPathInsideArchive, isTxtgFile } from './archives';
 import type { ArchiveTreeProvider } from './archiveTree';
 import { resolveRomfsPath } from './romfs';
 
 export const DUMP_SCHEME = 'totk-dump';
+const GAME_DUMP_SEARCH_VIEW_ID = 'totk-editor.gameDumpSearch';
 let dumpTreeView: vscode.TreeView<DumpTreeItem> | undefined;
 let extensionUri: vscode.Uri | undefined;
 
@@ -47,9 +49,108 @@ export class DumpTreeItem extends vscode.TreeItem {
 export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeItem> {
     private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<DumpTreeItem | undefined>();
     readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
+    private readonly onDidChangeSearchStateEmitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeSearchState = this.onDidChangeSearchStateEmitter.event;
+    private filterQuery = '';
+    private filterNeedle = '';
+    private indexedRootPath = '';
+    private indexedFiles: string[] = [];
+    private indexReady = false;
+    private indexBuildPromise: Promise<void> | undefined;
+    private indexBuilding = false;
+    private externalIndexBuildInProgress = false;
+    private externalIndexPath: string | undefined;
+    private lastComputedNeedle = '';
+    private visibleFileMatches = new Set<string>();
+    private visibleDirectoryMatches = new Set<string>();
 
     refresh(): void {
         this.onDidChangeTreeDataEmitter.fire(undefined);
+    }
+
+    setFilterQuery(query: string): void {
+        const nextQuery = query;
+        const nextNeedle = query.trim().toLowerCase();
+        if (nextQuery === this.filterQuery && nextNeedle === this.filterNeedle) {
+            return;
+        }
+        this.filterQuery = nextQuery;
+        this.filterNeedle = nextNeedle;
+        this.lastComputedNeedle = '';
+        if (!this.filterNeedle) {
+            this.visibleFileMatches.clear();
+            this.visibleDirectoryMatches.clear();
+            this.onDidChangeSearchStateEmitter.fire();
+            this.refresh();
+            return;
+        }
+        this.visibleFileMatches.clear();
+        this.visibleDirectoryMatches.clear();
+        this.onDidChangeSearchStateEmitter.fire();
+        void this.recomputeFilterMatches();
+        this.refresh();
+    }
+
+    clearFilterQuery(): void {
+        this.setFilterQuery('');
+    }
+
+    getFilterQuery(): string {
+        return this.filterQuery;
+    }
+
+    getSearchStatus(): string {
+        if (!this.filterNeedle) {
+            return '';
+        }
+        if (this.externalIndexBuildInProgress) {
+            return 'Building search index (Python)...';
+        }
+        if (this.indexBuilding) {
+            return `Indexing RomFS... (${this.indexedFiles.length.toLocaleString()} files)`;
+        }
+        if (!this.indexReady || this.lastComputedNeedle !== this.filterNeedle) {
+            return 'Searching...';
+        }
+        return `${this.visibleFileMatches.size.toLocaleString()} match(es)`;
+    }
+
+    onRomfsPathChanged(): void {
+        this.indexedRootPath = '';
+        this.indexedFiles = [];
+        this.indexReady = false;
+        this.indexBuildPromise = undefined;
+        this.indexBuilding = false;
+        this.externalIndexBuildInProgress = false;
+        this.lastComputedNeedle = '';
+        this.visibleFileMatches.clear();
+        this.visibleDirectoryMatches.clear();
+        if (this.filterNeedle) {
+            void this.recomputeFilterMatches();
+        }
+        this.onDidChangeSearchStateEmitter.fire();
+        this.refresh();
+    }
+
+    setExternalIndexPath(indexPath: string): void {
+        this.externalIndexPath = indexPath;
+    }
+
+    setExternalIndexBuilding(isBuilding: boolean): void {
+        this.externalIndexBuildInProgress = isBuilding;
+        this.onDidChangeSearchStateEmitter.fire();
+    }
+
+    onExternalIndexUpdated(): void {
+        this.indexedRootPath = '';
+        this.indexedFiles = [];
+        this.indexReady = false;
+        this.lastComputedNeedle = '';
+        if (this.filterNeedle) {
+            void this.recomputeFilterMatches();
+        }
+        this.onDidChangeSearchStateEmitter.fire();
+        this.refresh();
     }
 
     getTreeItem(element: DumpTreeItem): vscode.TreeItem {
@@ -66,7 +167,8 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
 
         try {
             const entries = await vscode.workspace.fs.readDirectory(parentUri);
-            return entries
+            const visibleEntries = await this.filterVisibleEntries(entries, parentUri);
+            return visibleEntries
                 .sort(compareEntriesFoldersFirstKeepingArchivesMixed)
                 .map(([name, fileType]) => {
                     const childUri = vscode.Uri.joinPath(parentUri, name);
@@ -92,6 +194,306 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
             return [];
         }
     }
+
+    private async filterVisibleEntries(
+        entries: [string, vscode.FileType][],
+        parentUri: vscode.Uri,
+    ): Promise<[string, vscode.FileType][]> {
+        if (!this.filterNeedle) {
+            return entries;
+        }
+
+        // During initial index build, keep lightweight local-name filtering for responsiveness.
+        if (this.indexBuilding || !this.indexReady || this.lastComputedNeedle !== this.filterNeedle) {
+            return entries.filter(([name, fileType]) =>
+                fileType === vscode.FileType.Directory || name.toLowerCase().includes(this.filterNeedle),
+            );
+        }
+
+        const romfsPath = resolveRomfsPath();
+        if (!romfsPath) {
+            return [];
+        }
+
+        return entries.filter(([name, fileType]) => {
+            const childUri = vscode.Uri.joinPath(parentUri, name);
+            const relativeKey = toRelativeSearchKey(childUri.fsPath, romfsPath);
+            if (fileType === vscode.FileType.Directory) {
+                return this.visibleDirectoryMatches.has(relativeKey);
+            }
+            return this.visibleFileMatches.has(relativeKey);
+        });
+    }
+
+    private async recomputeFilterMatches(): Promise<void> {
+        const romfsPath = resolveRomfsPath();
+        if (!romfsPath || !this.filterNeedle) {
+            return;
+        }
+
+        await this.ensureIndexBuilt(romfsPath);
+        if (!this.filterNeedle || romfsPath !== this.indexedRootPath) {
+            return;
+        }
+
+        const needle = this.filterNeedle;
+        const files = new Set<string>();
+        const dirs = new Set<string>();
+
+        for (const relativePath of this.indexedFiles) {
+            if (!relativePath.includes(needle)) {
+                continue;
+            }
+            files.add(relativePath);
+            let cursor = relativePath.lastIndexOf('/');
+            while (cursor > 0) {
+                const parent = relativePath.slice(0, cursor);
+                dirs.add(parent);
+                cursor = parent.lastIndexOf('/');
+            }
+            if (cursor === 0) {
+                dirs.add(relativePath.slice(0, 0));
+            }
+        }
+
+        this.visibleFileMatches = files;
+        this.visibleDirectoryMatches = dirs;
+        this.lastComputedNeedle = needle;
+        this.onDidChangeSearchStateEmitter.fire();
+        this.refresh();
+    }
+
+    private async ensureIndexBuilt(romfsPath: string): Promise<void> {
+        if (this.indexReady && this.indexedRootPath === romfsPath) {
+            return;
+        }
+        const loadedExternal = await this.tryLoadExternalIndex(romfsPath);
+        if (loadedExternal) {
+            return;
+        }
+        if (this.indexBuildPromise) {
+            await this.indexBuildPromise;
+            return;
+        }
+
+        this.indexBuilding = true;
+        this.onDidChangeSearchStateEmitter.fire();
+        this.indexBuildPromise = this.buildIndex(romfsPath);
+        try {
+            await this.indexBuildPromise;
+        } finally {
+            this.indexBuildPromise = undefined;
+            this.indexBuilding = false;
+            this.onDidChangeSearchStateEmitter.fire();
+        }
+    }
+
+    private async buildIndex(romfsPath: string): Promise<void> {
+        const rootUri = toDumpUri(vscode.Uri.file(romfsPath));
+        const pendingDirs: vscode.Uri[] = [rootUri];
+        const files: string[] = [];
+
+        while (pendingDirs.length > 0) {
+            const dir = pendingDirs.pop()!;
+            let entries: [string, vscode.FileType][];
+            try {
+                entries = await vscode.workspace.fs.readDirectory(dir);
+            } catch {
+                continue;
+            }
+            for (const [name, fileType] of entries) {
+                const childUri = vscode.Uri.joinPath(dir, name);
+                if (fileType === vscode.FileType.Directory) {
+                    pendingDirs.push(childUri);
+                } else {
+                    files.push(toRelativeSearchKey(childUri.fsPath, romfsPath));
+                    if (files.length % 5000 === 0) {
+                        this.indexedFiles = files;
+                        this.onDidChangeSearchStateEmitter.fire();
+                    }
+                }
+            }
+        }
+
+        this.indexedRootPath = romfsPath;
+        this.indexedFiles = files;
+        this.indexReady = true;
+    }
+
+    private async tryLoadExternalIndex(romfsPath: string): Promise<boolean> {
+        const indexPath = this.externalIndexPath;
+        if (!indexPath || !fs.existsSync(indexPath)) {
+            return false;
+        }
+        try {
+            const raw = await fs.promises.readFile(indexPath, 'utf-8');
+            const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
+            if (lines.length === 0) {
+                return false;
+            }
+            const header = lines[0]!;
+            if (!header.startsWith('#root=')) {
+                return false;
+            }
+            const indexedRoot = header.slice('#root='.length);
+            const normalizedIndexedRoot = indexedRoot.replace(/\\/g, '/').toLowerCase();
+            const normalizedRomfsRoot = romfsPath.replace(/\\/g, '/').toLowerCase();
+            if (normalizedIndexedRoot !== normalizedRomfsRoot) {
+                return false;
+            }
+            this.indexedRootPath = romfsPath;
+            this.indexedFiles = lines.slice(1);
+            this.indexReady = true;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+}
+
+class GameDumpSearchViewProvider implements vscode.WebviewViewProvider {
+    private view: vscode.WebviewView | undefined;
+    private debounceHandle: NodeJS.Timeout | undefined;
+
+    constructor(private readonly treeProvider: GameDumpTreeProvider) {}
+
+    resolveWebviewView(webviewView: vscode.WebviewView): void {
+        this.view = webviewView;
+        webviewView.webview.options = { enableScripts: true };
+        webviewView.webview.html = this.buildHtml(this.treeProvider.getFilterQuery());
+
+        webviewView.webview.onDidReceiveMessage((message: { type: string; query?: string }) => {
+            if (message.type === 'setQuery') {
+                const query = message.query ?? '';
+                if (this.debounceHandle) {
+                    clearTimeout(this.debounceHandle);
+                }
+                this.debounceHandle = setTimeout(() => {
+                    this.treeProvider.setFilterQuery(query);
+                }, 120);
+            }
+            if (message.type === 'clear') {
+                this.treeProvider.clearFilterQuery();
+                this.postQuery('');
+            }
+        });
+    }
+
+    postQuery(query: string): void {
+        if (!this.view) {
+            return;
+        }
+        void this.view.webview.postMessage({ type: 'setQuery', query });
+    }
+
+    postStatus(status: string): void {
+        if (!this.view) {
+            return;
+        }
+        void this.view.webview.postMessage({ type: 'setStatus', status });
+    }
+
+    private buildHtml(initialQuery: string): string {
+        const escaped = escapeHtml(initialQuery);
+        return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+    body {
+        margin: 0;
+        padding: 8px;
+        background: var(--vscode-sideBar-background);
+        color: var(--vscode-foreground);
+        font-family: var(--vscode-font-family);
+        font-size: 12px;
+    }
+    .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .status {
+        margin-top: 6px;
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground);
+        min-height: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    input {
+        flex: 1;
+        height: 24px;
+        border-radius: 4px;
+        border: 1px solid var(--vscode-input-border, transparent);
+        background: var(--vscode-input-background);
+        color: var(--vscode-input-foreground);
+        padding: 0 8px;
+        outline: none;
+    }
+    input:focus {
+        border-color: var(--vscode-focusBorder);
+    }
+    button {
+        height: 24px;
+        min-width: 24px;
+        border-radius: 4px;
+        border: 1px solid var(--vscode-button-border, transparent);
+        background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+        color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+        cursor: pointer;
+        padding: 0 6px;
+    }
+    button:hover {
+        background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+    }
+</style>
+</head>
+<body>
+    <div class="row">
+        <input id="q" type="text" value="${escaped}" placeholder="Filter game dump..." />
+        <button id="clear" title="Clear">✕</button>
+    </div>
+    <div id="status" class="status"></div>
+    <script>
+        const vscode = acquireVsCodeApi();
+        const input = document.getElementById('q');
+        const clear = document.getElementById('clear');
+        const status = document.getElementById('status');
+
+        input.addEventListener('input', () => {
+            vscode.postMessage({ type: 'setQuery', query: input.value });
+        });
+        clear.addEventListener('click', () => {
+            input.value = '';
+            vscode.postMessage({ type: 'clear' });
+            input.focus();
+        });
+
+        window.addEventListener('message', (event) => {
+            const msg = event.data;
+            if (msg?.type === 'setQuery') {
+                input.value = msg.query ?? '';
+            }
+            if (msg?.type === 'setStatus') {
+                status.textContent = msg.status ?? '';
+            }
+        });
+    </script>
+</body>
+</html>`;
+    }
+}
+
+function toRelativeSearchKey(fsPath: string, rootPath: string): string {
+    const normalizedPath = fsPath.replace(/\\/g, '/');
+    const normalizedRoot = rootPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (!normalizedPath.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
+        return normalizedPath.toLowerCase();
+    }
+    const relative = normalizedPath.slice(normalizedRoot.length).replace(/^\/+/, '');
+    return relative.toLowerCase();
 }
 
 function compareEntriesFoldersFirstKeepingArchivesMixed(
@@ -145,6 +547,22 @@ export function registerGameDumpTree(
     });
     dumpTreeView = treeView;
     context.subscriptions.push(treeView);
+    const searchViewProvider = new GameDumpSearchViewProvider(provider);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(GAME_DUMP_SEARCH_VIEW_ID, searchViewProvider),
+    );
+    const updateFilterUi = (): void => {
+        const query = provider.getFilterQuery().trim();
+        const status = provider.getSearchStatus();
+        if (query) {
+            treeView.message = status ? `Search: ${query} - ${status}` : `Search: ${query}`;
+        } else {
+            treeView.message = undefined;
+        }
+        searchViewProvider.postStatus(status);
+    };
+    context.subscriptions.push(provider.onDidChangeSearchState(updateFilterUi));
+    updateFilterUi();
 
     const selectedItems = (item?: DumpTreeItem): DumpTreeItem[] => {
         if (!item) {
@@ -161,7 +579,7 @@ export function registerGameDumpTree(
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration('totk-editor.romfsPath')) {
-                provider.refresh();
+                provider.onRomfsPathChanged();
             }
         }),
     );
@@ -230,4 +648,13 @@ export function registerGameDumpTree(
     );
 
     return provider;
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
