@@ -15,12 +15,10 @@
 - [ ] tkmm options
 - [ ] tkcl parser
 
-### Node Editor
-- [x] Node colouring
 
 ## 5th
 - [x] organize repo
-- [ ] abstract editable files into configs
+- [x] abstract editable files into configs
 - [x] ainb file handling
 
 ## Aster
@@ -32,4 +30,11 @@
 - [ ] Material Animations
 - [ ] Node-Based formats
 - [ ] BFRES Family (separate icons)
+- [ ] TKVSC Logo
 
+## Node Editor
+- [x] Node colouring
+- [x] Load all connections on AINB load and DONT cull them completely (impl frustum culling or pixel culling or something)
+- [ ] Loading screen if possible
+- [ ] No more "and x more..."
+- [ ] Impl my auto sort algorithm
