@@ -28,6 +28,16 @@ def is_xlnk_binary(file_data: bytes) -> bool:
     return len(data) >= 4 and data[:4] == b'XLNK'
 
 
+def _platform_tool_names() -> list[str]:
+    """Return candidate binary names for the current platform, most specific first."""
+    import sys
+    if os.name == 'nt':
+        return ['xlink_tool.exe']
+    if sys.platform == 'darwin':
+        return ['xlink_tool_osx', 'xlink_tool']
+    return ['xlink_tool_linux', 'xlink_tool']
+
+
 def find_xlink_tool() -> str:
     override = os.environ.get('TOTK_XLINK_TOOL', '').strip()
     if override:
@@ -35,17 +45,21 @@ def find_xlink_tool() -> str:
             return override
         raise FileNotFoundError(f'TOTK_XLINK_TOOL is not a file: {override}')
 
-    name = 'xlink_tool.exe' if os.name == 'nt' else 'xlink_tool'
-    for bundled in [
-        _SCRIPT_DIR / 'vendor' / 'xlink2' / name,
-        _SCRIPT_DIR.parent / 'vendor' / 'xlink2' / name,
-    ]:
-        if bundled.is_file():
-            return str(bundled)
+    candidates = _platform_tool_names()
+    search_dirs = [
+        _SCRIPT_DIR / 'vendor' / 'xlink2',
+        _SCRIPT_DIR.parent / 'vendor' / 'xlink2',
+    ]
+    for d in search_dirs:
+        for name in candidates:
+            p = d / name
+            if p.is_file():
+                p.chmod(p.stat().st_mode | 0o111)
+                return str(p)
 
     raise FileNotFoundError(
         'xlink_tool not found. Install dt-12345/xlink2 and set TOTK_XLINK_TOOL, '
-        f'or place {name} in vendor/xlink2/.'
+        f'or place one of {candidates} in vendor/xlink2/.'
     )
 
 
