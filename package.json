@@ -1,5 +1,6 @@
 {
   "name": "totk-vscode",
+  "icon": "icons/ExtensionIcon.png",
   "publisher": "totk-editor",
   "displayName": "totk-vscode",
   "description": "Edits TOTK archives, BYML, AAMP (many extensions), MSBT, ASB, BAEV, and XLNK (.belnk / .bslnk) files",
