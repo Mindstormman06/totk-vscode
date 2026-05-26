@@ -15,20 +15,21 @@
 - [ ] tkmm options
 - [ ] tkcl parser
 
+### Node Editor
+- [x] Node colouring
+
 ## 5th
 - [x] organize repo
 - [ ] abstract editable files into configs
 - [x] ainb file handling
 
 ## Aster
-- Icons:
-- - [x] MSBT
-- - [x] BGYML/BYML/AAMP
-- - [x] ASB/BAEV
-- - [x] XLINK
-- - [ ] Material Animations
-- - [ ] Node-Based formats
-- - [ ] BFRES Family (separate icons)
+### Icons
+- [x] MSBT
+- [x] BGYML/BYML/AAMP
+- [x] ASB/BAEV
+- [x] XLINK
+- [ ] Material Animations
+- [ ] Node-Based formats
+- [ ] BFRES Family (separate icons)
 
-## Node Editor
-- [x] Node colouring
