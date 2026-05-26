@@ -1,9 +1,9 @@
 import argparse
+import base64
 import json
 import sys
 from pathlib import Path
 
-# Add vendor ainb library to sys.path so we can import it directly.
 _VENDOR_AINB = str(Path(__file__).resolve().parent.parent / 'vendor' / 'ainb')
 if _VENDOR_AINB not in sys.path:
     sys.path.insert(0, _VENDOR_AINB)
@@ -11,56 +11,55 @@ if _VENDOR_AINB not in sys.path:
 from ainb.ainb import AINB
 from ainb.node import Node, NodeType
 
-def handle_rpc(file_path: str, command_str: str):
+
+def _load_ainb(file_path: str | None, use_stdin: bool) -> tuple["AINB", bool]:
+    """Load an AINB from stdin (raw binary) or from a file path.
+    Returns (ainb_file, is_binary)."""
+    if use_stdin:
+        raw = sys.stdin.buffer.read()
+        return AINB.from_binary(raw), True
+
+    p = Path(file_path)
+    is_binary = p.suffix.lower() == ".ainb"
+    if is_binary:
+        return AINB.from_file(file_path), True
+    else:
+        return AINB.from_json(file_path), False
+
+
+def handle_rpc(file_path: str | None, command_str: str, use_stdin: bool = False):
     try:
         command = json.loads(command_str)
         action = command.get("action")
         payload = command.get("payload", {})
 
-        file_path_obj = Path(file_path)
-        is_binary = file_path_obj.suffix.lower() == ".ainb"
-
-        # 1. Handle decoding binary files for the frontend
         if action == "to_json":
-            ainb_file = AINB.from_file(file_path) # Load as binary
+            ainb_file, _ = _load_ainb(file_path, use_stdin)
             print(json.dumps({
-                "status": "success", 
+                "status": "success",
                 "data": ainb_file.as_dict()
             }))
             return
 
-        # 2. Handle Editor RPC Actions
-        # Conditionally load based on file extension
-        if is_binary:
-            ainb_file = AINB.from_file(file_path)
-        else:
-            ainb_file = AINB.from_json(file_path)
+        ainb_file, is_binary = _load_ainb(file_path, use_stdin)
 
-        # Route the actions mapped to your Editing API
         if action == "link_nodes":
             src_str = payload["source"]
             tgt_str = payload["target"]
-            
-            # The target will always be a node (you can't link to a command)
+
             tgt_idx = int(tgt_str.replace("node-", ""))
             tgt_node = ainb_file.get_node(tgt_idx)
 
-            # Check if the source is a Command (Entry Point)
             if src_str.startswith("cmd-"):
                 cmd_idx = int(src_str.replace("cmd-", ""))
                 command = ainb_file.get_command(cmd_idx)
-                
                 if command and tgt_node:
-                    # Update the command to point to the new root node
                     command.root_node_index = tgt_node.index
 
-            # Otherwise, it's a standard Node-to-Node connection
             elif src_str.startswith("node-"):
                 src_idx = int(src_str.replace("node-", ""))
                 src_node = ainb_file.get_node(src_idx)
-                
                 if src_node and tgt_node:
-                    # Use your existing API to link children
                     src_node.link_child(tgt_node, connection_name="Linked")
 
         elif action == "remove_node":
@@ -83,15 +82,13 @@ def handle_rpc(file_path: str, command_str: str):
             if node:
                 from ainb.param_common import ParamType
                 clean_type = param_group.lower().split(" ")[0]
-                
                 type_map = {
                     "bool": ParamType.Bool,
                     "float": ParamType.Float,
                     "int": ParamType.Int,
                     "string": ParamType.String,
-                    "vec3f": ParamType.Vec3f
+                    "vec3f": ParamType.Vec3f,
                 }
-                
                 p_type = type_map.get(clean_type)
                 if p_type:
                     node.update_input_default(p_type, param_name, new_val)
@@ -99,28 +96,27 @@ def handle_rpc(file_path: str, command_str: str):
         else:
             raise ValueError(f"Unknown RPC action: {action}")
 
-        # --- IN-MEMORY SAVING (NO MORE DISK LOCKS!) ---
-        # Instead of writing to disk and angering the VS Code file watcher,
-        # we export the new file to a base64 string and let VS Code write it.
-        import base64
+        out_binary = ainb_file.to_binary()
+        b64_data = base64.b64encode(out_binary).decode("utf-8")
+        json_model = ainb_file.as_dict()
 
-        if is_binary:
-            out_data = ainb_file.to_binary()
-            b64_data = base64.b64encode(out_data).decode('utf-8')
-            print(json.dumps({"status": "success", "action": action, "data": b64_data}))
-        else:
-            out_data = ainb_file.to_json()
-            b64_data = base64.b64encode(out_data.encode('utf-8')).decode('utf-8')
-            print(json.dumps({"status": "success", "action": action, "data": b64_data}))
+        print(json.dumps({
+            "status": "success",
+            "action": action,
+            "data": b64_data,
+            "model": json_model,
+        }))
 
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
         sys.exit(1)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--file", required=True, help="Path to the AINB JSON file")
+    parser.add_argument("--file", required=False, help="Path to the AINB file")
+    parser.add_argument("--stdin", action="store_true", help="Read raw AINB binary from stdin")
     parser.add_argument("--command", required=True, help="JSON string of the RPC command")
     args = parser.parse_args()
 
-    handle_rpc(args.file, args.command)
+    handle_rpc(args.file, args.command, use_stdin=args.stdin)
