@@ -47,6 +47,7 @@ Preview and edit subfiles of SARC and BNTX archives
 ### Requirements
 * [Python 3.12](https://www.python.org/downloads/release/python-31213/)
 * Node.js
+* Python 3.12-venv (on Linux)
 * Valid TotK dump
 
 ### Steps
