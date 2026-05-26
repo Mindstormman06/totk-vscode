@@ -5,6 +5,7 @@ import { addDumpEntryToProject, pickProjectRoot } from './addToProject';
 import { isArchiveFile, isBntxTextureUri, isPathInsideArchive, isTxtgFile } from './archives';
 import type { ArchiveTreeProvider } from './archiveTree';
 import { resolveRomfsPath } from './romfs';
+import { invalidateRomfsIndex, queryRomfsIndex } from './romfsIndex';
 
 export const DUMP_SCHEME = 'totk-dump';
 const GAME_DUMP_SEARCH_VIEW_ID = 'totk-editor.gameDumpSearch';
@@ -53,11 +54,7 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
     readonly onDidChangeSearchState = this.onDidChangeSearchStateEmitter.event;
     private filterQuery = '';
     private filterNeedle = '';
-    private indexedRootPath = '';
-    private indexedFiles: string[] = [];
     private indexReady = false;
-    private indexBuildPromise: Promise<void> | undefined;
-    private indexBuilding = false;
     private externalIndexBuildInProgress = false;
     private externalIndexPath: string | undefined;
     private lastComputedNeedle = '';
@@ -104,10 +101,7 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
             return '';
         }
         if (this.externalIndexBuildInProgress) {
-            return 'Building search index (Python)...';
-        }
-        if (this.indexBuilding) {
-            return `Indexing RomFS... (${this.indexedFiles.length.toLocaleString()} files)`;
+            return 'Building search index...';
         }
         if (!this.indexReady || this.lastComputedNeedle !== this.filterNeedle) {
             return 'Searching...';
@@ -116,15 +110,12 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
     }
 
     onRomfsPathChanged(): void {
-        this.indexedRootPath = '';
-        this.indexedFiles = [];
         this.indexReady = false;
-        this.indexBuildPromise = undefined;
-        this.indexBuilding = false;
         this.externalIndexBuildInProgress = false;
         this.lastComputedNeedle = '';
         this.visibleFileMatches.clear();
         this.visibleDirectoryMatches.clear();
+        invalidateRomfsIndex();
         if (this.filterNeedle) {
             void this.recomputeFilterMatches();
         }
@@ -142,10 +133,9 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
     }
 
     onExternalIndexUpdated(): void {
-        this.indexedRootPath = '';
-        this.indexedFiles = [];
         this.indexReady = false;
         this.lastComputedNeedle = '';
+        invalidateRomfsIndex();
         if (this.filterNeedle) {
             void this.recomputeFilterMatches();
         }
@@ -203,8 +193,7 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
             return entries;
         }
 
-        // During initial index build, keep lightweight local-name filtering for responsiveness.
-        if (this.indexBuilding || !this.indexReady || this.lastComputedNeedle !== this.filterNeedle) {
+        if (!this.indexReady || this.lastComputedNeedle !== this.filterNeedle) {
             return entries.filter(([name, fileType]) =>
                 fileType === vscode.FileType.Directory || name.toLowerCase().includes(this.filterNeedle),
             );
@@ -231,123 +220,24 @@ export class GameDumpTreeProvider implements vscode.TreeDataProvider<DumpTreeIte
             return;
         }
 
-        await this.ensureIndexBuilt(romfsPath);
-        if (!this.filterNeedle || romfsPath !== this.indexedRootPath) {
+        const indexPath = this.externalIndexPath;
+        if (!indexPath || !fs.existsSync(indexPath)) {
             return;
         }
 
         const needle = this.filterNeedle;
-        const files = new Set<string>();
-        const dirs = new Set<string>();
+        const result = await queryRomfsIndex(indexPath, romfsPath, needle);
 
-        for (const relativePath of this.indexedFiles) {
-            if (!relativePath.includes(needle)) {
-                continue;
-            }
-            files.add(relativePath);
-            let cursor = relativePath.lastIndexOf('/');
-            while (cursor > 0) {
-                const parent = relativePath.slice(0, cursor);
-                dirs.add(parent);
-                cursor = parent.lastIndexOf('/');
-            }
-            if (cursor === 0) {
-                dirs.add(relativePath.slice(0, 0));
-            }
+        if (!result || this.filterNeedle !== needle) {
+            return;
         }
 
-        this.visibleFileMatches = files;
-        this.visibleDirectoryMatches = dirs;
+        this.visibleFileMatches = result.matchedFiles;
+        this.visibleDirectoryMatches = result.matchedDirs;
         this.lastComputedNeedle = needle;
+        this.indexReady = true;
         this.onDidChangeSearchStateEmitter.fire();
         this.refresh();
-    }
-
-    private async ensureIndexBuilt(romfsPath: string): Promise<void> {
-        if (this.indexReady && this.indexedRootPath === romfsPath) {
-            return;
-        }
-        const loadedExternal = await this.tryLoadExternalIndex(romfsPath);
-        if (loadedExternal) {
-            return;
-        }
-        if (this.indexBuildPromise) {
-            await this.indexBuildPromise;
-            return;
-        }
-
-        this.indexBuilding = true;
-        this.onDidChangeSearchStateEmitter.fire();
-        this.indexBuildPromise = this.buildIndex(romfsPath);
-        try {
-            await this.indexBuildPromise;
-        } finally {
-            this.indexBuildPromise = undefined;
-            this.indexBuilding = false;
-            this.onDidChangeSearchStateEmitter.fire();
-        }
-    }
-
-    private async buildIndex(romfsPath: string): Promise<void> {
-        const rootUri = toDumpUri(vscode.Uri.file(romfsPath));
-        const pendingDirs: vscode.Uri[] = [rootUri];
-        const files: string[] = [];
-
-        while (pendingDirs.length > 0) {
-            const dir = pendingDirs.pop()!;
-            let entries: [string, vscode.FileType][];
-            try {
-                entries = await vscode.workspace.fs.readDirectory(dir);
-            } catch {
-                continue;
-            }
-            for (const [name, fileType] of entries) {
-                const childUri = vscode.Uri.joinPath(dir, name);
-                if (fileType === vscode.FileType.Directory) {
-                    pendingDirs.push(childUri);
-                } else {
-                    files.push(toRelativeSearchKey(childUri.fsPath, romfsPath));
-                    if (files.length % 5000 === 0) {
-                        this.indexedFiles = files;
-                        this.onDidChangeSearchStateEmitter.fire();
-                    }
-                }
-            }
-        }
-
-        this.indexedRootPath = romfsPath;
-        this.indexedFiles = files;
-        this.indexReady = true;
-    }
-
-    private async tryLoadExternalIndex(romfsPath: string): Promise<boolean> {
-        const indexPath = this.externalIndexPath;
-        if (!indexPath || !fs.existsSync(indexPath)) {
-            return false;
-        }
-        try {
-            const raw = await fs.promises.readFile(indexPath, 'utf-8');
-            const lines = raw.split(/\r?\n/).filter((line) => line.length > 0);
-            if (lines.length === 0) {
-                return false;
-            }
-            const header = lines[0]!;
-            if (!header.startsWith('#root=')) {
-                return false;
-            }
-            const indexedRoot = header.slice('#root='.length);
-            const normalizedIndexedRoot = indexedRoot.replace(/\\/g, '/').toLowerCase();
-            const normalizedRomfsRoot = romfsPath.replace(/\\/g, '/').toLowerCase();
-            if (normalizedIndexedRoot !== normalizedRomfsRoot) {
-                return false;
-            }
-            this.indexedRootPath = romfsPath;
-            this.indexedFiles = lines.slice(1);
-            this.indexReady = true;
-            return true;
-        } catch {
-            return false;
-        }
     }
 }
 

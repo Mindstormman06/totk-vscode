@@ -52,6 +52,7 @@ import {
 import { getCoreExtensions, initCoreFsExtensions } from './coreFsExtensions';
 import { AinbNodeEditorProvider } from './nodeEditor/provider';
 import { TkprojEditorProvider } from './tkprojEditor';
+import { setExtensionPath } from './romfsIndex';
 
 function shouldOfferExternalToolPrompt(content: string): boolean {
     return content.startsWith('<Binary Data:') || content.startsWith('Error reading file:');
@@ -531,6 +532,7 @@ export async function activate(context: vscode.ExtensionContext) {
     initAampExtensions(context.extensionPath);
     initCoreFsExtensions(context.extensionPath);
     initTextureViewer(context.extensionUri);
+    setExtensionPath(context.extensionPath);
     console.log('TOTK Editor is now active!');
 
     registerDocumentLanguageModes(context);
@@ -539,7 +541,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const bridgePath = path.join(context.extensionPath, 'python', 'totk_bridge.py');
     const getPython = () => getCachedPythonExecutable() ?? '';
-    const romfsIndexPath = path.join(context.globalStorageUri.fsPath, 'romfs-index.txt');
+    const romfsIndexPath = path.join(context.globalStorageUri.fsPath, 'romfs-index.sqlite');
     let romfsIndexBuildPromise: Promise<void> | undefined;
     let gameDumpTree: ReturnType<typeof registerGameDumpTree> | undefined;
 
