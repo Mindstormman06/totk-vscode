@@ -51,10 +51,11 @@ def _read_cstring(data: bytes, offset: int) -> str:
 class BntxTexture:
     """Minimal parsed texture metadata."""
     __slots__ = ('name', 'width', 'height', 'format_id', 'mip_count',
-                 'data_offset', 'data_size')
+                 'data_offset', 'data_size', 'tile_mode', 'block_height_log2')
 
     def __init__(self, name: str, width: int, height: int, format_id: int,
-                 mip_count: int, data_offset: int, data_size: int):
+                 mip_count: int, data_offset: int, data_size: int,
+                 tile_mode: int = 0, block_height_log2: int = 4):
         self.name = name
         self.width = width
         self.height = height
@@ -62,6 +63,8 @@ class BntxTexture:
         self.mip_count = mip_count
         self.data_offset = data_offset
         self.data_size = data_size
+        self.tile_mode = tile_mode
+        self.block_height_log2 = block_height_log2
 
 
 def _parse_textures(data: bytes) -> list[BntxTexture]:
@@ -108,11 +111,14 @@ def _parse_textures(data: bytes) -> list[BntxTexture]:
         # TextureInfo data starts after the 16-byte block header
         d = brti_abs + 0x10
 
+        tile_mode = _read_u16(data, d + 0x02, le)
         mip_count = _read_u16(data, d + 0x06, le)
         format_id = _read_u32(data, d + 0x0C, le)
         width = _read_i32(data, d + 0x14, le)
         height = _read_i32(data, d + 0x18, le)
         image_size = _read_u32(data, d + 0x40, le)
+        layout = _read_u32(data, d + 0x24, le)
+        block_height_log2 = layout & 0x07
 
         name_addr = _read_i64(data, d + 0x50, le)
         _log(f'  Texture {i}: nameAddr=0x{name_addr:X}, {width}x{height}, fmt=0x{format_id:04X}')
@@ -140,6 +146,8 @@ def _parse_textures(data: bytes) -> list[BntxTexture]:
             mip_count=mip_count,
             data_offset=first_mip_offset,
             data_size=image_size,
+            tile_mode=tile_mode,
+            block_height_log2=block_height_log2,
         ))
 
     _log(f'Parsed {len(textures)} textures')

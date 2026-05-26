@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Buffer } from 'buffer';
-import { runBridgeJson, runBridgeReadContent } from './bridge';
+import { isBntxTextureResult, runBridgeJson, runBridgeRead, runBridgeReadContent } from './bridge';
+import { openTextureViewer } from './textureViewer';
 import {
     ensurePythonEnvironment,
     getCachedPythonExecutable,
@@ -347,12 +348,30 @@ class SarcProvider implements vscode.FileSystemProvider {
 
         try {
             console.log(`Reading: ${diskArchive} / ${filePath}`);
-            const content = runBridgeReadContent(
+            const raw = runBridgeRead(
                 this.requirePython(),
                 this.bridgePath,
                 ['read', diskArchive, filePath],
                 getBridgeEnv(),
             );
+
+            if (isBntxTextureResult(raw)) {
+                const texName = raw.metadata?.name ?? filePath.split('/').pop() ?? 'texture';
+                void openTextureViewer(texName, raw);
+                return new TextEncoder().encode('');
+            }
+
+            const content = (() => {
+                const r = raw as { content?: string; contentPath?: string };
+                if (r.contentPath) {
+                    try {
+                        return fs.readFileSync(r.contentPath, 'utf-8');
+                    } finally {
+                        try { fs.unlinkSync(r.contentPath); } catch { /* best-effort */ }
+                    }
+                }
+                return r.content ?? '';
+            })();
 
             if (shouldOfferExternalToolPrompt(content)) {
                 const reason = content.startsWith('Error reading file:')

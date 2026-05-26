@@ -11,6 +11,7 @@
 - [x] export files from archive
 - [x] blarc support
 - [x] bntx archive support
+- [x] bntx texture viewer
 - [ ] tkmm options
 - [ ] tkcl parser
 
