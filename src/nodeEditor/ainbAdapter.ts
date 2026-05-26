@@ -10,14 +10,14 @@ import type {
 } from './types';
 
 // --- STRICT AINB JSON TYPES ---
-type AinbSource = { 'Node Index'?: number; 'Parameter Index'?: number };
+type AinbSource = { 'Node Index'?: number; 'Parameter Index'?: number; 'Blackboard Index'?: number };
 type AinbParam = { Name?: string; Value?: any; 'Default Value'?: any; 'Source Node Index'?: number; Source?: AinbSource; 'Blackboard Index'?: number };
 type AinbPlug = { 'Node Index'?: number; Name?: string; 'Transition Type'?: number };
 type AinbNode = { 'Node Index': number; Name?: string; 'Node Type'?: string; Flags?: string[]; Properties?: Record<string, any>; Parameters?: Record<string, AinbParam[]>; Plugs?: Record<string, AinbPlug[]> };
 type AinbCommand = { Name: string; GUID?: string; 'Root Node Index'?: number };
-type AinbJson = { Filename?: string; Commands?: AinbCommand[]; Nodes?: AinbNode[] };
+type AinbJson = { Filename?: string; Commands?: AinbCommand[]; Nodes?: AinbNode[]; Blackboard?: any };
 
-type AinbDef = { tags: string[]; eventColor?: NodeRoleColor };
+type AinbDef = { tags: string[]; eventColor?: NodeRoleColor | string };
 
 export class AinbNodeFormatAdapter implements NodeFormatAdapter {
     public readonly id = 'ainb-json';
@@ -28,7 +28,9 @@ export class AinbNodeFormatAdapter implements NodeFormatAdapter {
     ) {}
 
     supports(filePath: string): boolean {
-        return filePath.toLowerCase().endsWith('.ainb.json');
+        const lowerPath = filePath.toLowerCase();
+        // Support both .ainb.json and standard .ainb extensions
+        return lowerPath.endsWith('.ainb.json') || lowerPath.endsWith('.ainb');
     }
 
     parse(filePath: string, rawText: string): AdapterParseResult {
@@ -59,6 +61,9 @@ export class AinbNodeFormatAdapter implements NodeFormatAdapter {
                 fileName: path.basename(filePath),
                 nodes: [...entryNodes, ...regularNodes],
                 edges,
+                commands, // NEW
+                blackboard: data.Blackboard || {}, // NEW
+                rawNodes: ainbNodes // NEW: so the inspector can see default values
             },
             originalText: rawText,
         };

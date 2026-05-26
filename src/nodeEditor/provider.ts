@@ -1,7 +1,29 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import * as cp from 'child_process';
+import * as util from 'util';
 import { NodeEditorAdapterRegistry } from './registry';
+
+const execPromise = util.promisify(cp.exec);
+
+// --- Python RPC Helpers ---
+// Grabs the workspace's configured Python, or defaults to system 'python'
+function getCachedPythonExecutable(): string {
+    return vscode.workspace.getConfiguration('python').get<string>('defaultInterpreterPath') || 'python';
+}
+
+// Executes the Python RPC script and parses the JSON response
+async function runBridgeJson(pythonExe: string, args: string[]): Promise<any> {
+    const extDir = path.join(__dirname, '..', '..'); // Adjust depending on where provider.ts is relative to ainb_rpc.py
+    const scriptPath = path.join(extDir, args[0]);   // Assuming args[0] is the script name
+    
+    // Properly quote arguments to handle spaces and JSON strings in the shell
+    const commandArgs = [scriptPath, ...args.slice(1)].map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(' ');
+    
+    const { stdout } = await execPromise(`"${pythonExe}" ${commandArgs}`);
+    return JSON.parse(stdout.trim());
+}
 
 type NodeEditorMessage =
     | { type: 'ready' }
@@ -54,7 +76,7 @@ export class AinbNodeEditorProvider implements vscode.CustomTextEditorProvider {
             }
         };
 
-// Message receiver from React App
+        // Message receiver from React App
         webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
             switch (msg.type) {
                 case 'ready':

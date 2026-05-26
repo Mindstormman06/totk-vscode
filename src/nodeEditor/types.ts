@@ -44,8 +44,10 @@ export type NodeEditorModel = {
     fileName: string;
     nodes: NodeEditorNode[];
     edges: NodeEditorEdge[];
+    commands?: any[];
+    blackboard?: any;
+    rawNodes?: any[]; // Keep a reference to raw nodes for the inspector
 };
-
 export type AdapterParseResult = {
     model: NodeEditorModel;
     originalText: string;

@@ -6,6 +6,8 @@ import {
   applyNodeChanges, useViewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { addEdge } from '@xyflow/react';
+import { useOnSelectionChange } from '@xyflow/react';
 
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
 
@@ -345,6 +347,34 @@ function FlowInner({ model }) {
     return () => ro.disconnect();
   }, []);
 
+  // 1. Handle Wire Connections
+  const onConnect = useCallback((connection) => {
+    // Optimistically update UI so the wire appears instantly
+    setNodes((nds) => addEdge(connection, nds));
+
+    // Send the command to Python to actually save it
+    vscode?.postMessage({
+      type: 'rpc_edit',
+      payload: {
+        action: 'link_nodes',
+        payload: { source: connection.source, target: connection.target }
+      }
+    });
+  }, []);
+
+  // 2. Handle Node Deletion (Backspace / Delete key)
+  const onNodesDelete = useCallback((deletedNodes) => {
+    deletedNodes.forEach(node => {
+      vscode?.postMessage({
+        type: 'rpc_edit',
+        payload: {
+          action: 'remove_node',
+          payload: { nodeId: node.id }
+        }
+      });
+    });
+  }, []);
+
   const viewport = useViewport();
   const { zoom } = viewport;
 
@@ -491,9 +521,12 @@ function FlowInner({ model }) {
 
   return (
     <div ref={containerRef} style={{ flex: 1, minHeight: 0 }}>
-      <ReactFlow
+    <ReactFlow
         nodes={culledNodes}
         edges={visibleEdges}
+        onConnect={onConnect}             // NEW
+        onNodesDelete={onNodesDelete}     // NEW
+        nodesConnectable={true}           // CHANGED: allow drawing edges
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={DEFAULT_EDGE_OPTS}
@@ -502,7 +535,6 @@ function FlowInner({ model }) {
         onPaneClick={onPaneClick}
 
         nodesDraggable={true}
-        nodesConnectable={false}
         elementsSelectable={true}
         zoomOnDoubleClick={false}
         panOnDrag={[1, 2]}
@@ -546,23 +578,119 @@ export default function App() {
 
   return (
     <div className="node-editor-root">
-      <div className="node-editor-toolbar">
-        <button type="button"
-          onClick={() => vscode?.postMessage({ type: 'requestSaveScaffold' })}>
-          Validate Save Scaffold
-        </button>
+      <div className="node-editor-toolbar">...</div>
+      <div className="node-editor-title">...</div>
+      
+      {/* NEW LAYOUT WRAPPER */}
+      <div className="node-editor-main">
+        <ReactFlowProvider style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <FlowInner model={model} />
+          <InspectorPanel model={model} />
+        </ReactFlowProvider>
       </div>
-      <div className="node-editor-title">
-        {model?.fileName
-          ? `${model.fileName} (${model.nodes?.length ?? 0} nodes)`
-          : 'AINB Node Editor'}
-      </div>
-      {!model && !error && <div style={{ padding: 12 }}>Loading AINB graph…</div>}
-      {error && <div style={{ padding: 12, color: '#d33' }}>{error}</div>}
-      <ReactFlowProvider style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        <FlowInner model={model} />
-      </ReactFlowProvider>
-
     </div>
   );
 }
+
+// --- INSPECTOR PANEL ---
+const InspectorPanel = memo(function InspectorPanel({ model }) {
+  const [selectedNodes, setSelectedNodes] = useState([]);
+  
+  useOnSelectionChange({
+    onChange: ({ nodes }) => setSelectedNodes(nodes),
+  });
+
+  const selectedNode = selectedNodes.length > 0 ? selectedNodes[0] : null;
+
+  // Handle Input Changes and dispatch to Python
+  const handleNodeParamChange = (nodeId, paramType, paramName, newValue) => {
+    vscode?.postMessage({
+      type: 'rpc_edit',
+      payload: {
+        action: 'edit_node_param',
+        payload: { nodeId, paramType, paramName, newValue }
+      }
+    });
+  };
+
+  const renderNodeInspector = () => {
+    const rawNode = model?.rawNodes?.find(n => `node-${n['Node Index']}` === selectedNode.id);
+    if (!rawNode) return <div style={{color: '#8b949e'}}>Entry Command Selected.</div>;
+
+    return (
+      <>
+        <div className="inspector-section">
+          <div className="inspector-section-title">Node Info</div>
+          <div className="inspector-row"><label>ID:</label> {rawNode['Node Index']}</div>
+          <div className="inspector-row"><label>Name:</label> {rawNode.Name}</div>
+          <div className="inspector-row"><label>Type:</label> {rawNode['Node Type']}</div>
+        </div>
+
+        {Object.entries(rawNode.Parameters || {}).map(([paramGroup, params]) => {
+           // We only want to edit Inputs that are not linked
+           if (paramGroup.toLowerCase().includes('output')) return null;
+           
+           return (
+             <div className="inspector-section" key={paramGroup}>
+               <div className="inspector-section-title">{paramGroup}</div>
+               {params.map((p, i) => {
+                 const isLinked = p['Source Node Index'] >= 0;
+                 return (
+                   <div className="inspector-row" key={i}>
+                     <label>{p.Name} {isLinked ? '(Linked)' : ''}</label>
+                     <input 
+                        type="text" 
+                        defaultValue={p.Value ?? p['Default Value'] ?? ''}
+                        disabled={isLinked}
+                        onBlur={(e) => handleNodeParamChange(rawNode['Node Index'], paramGroup, p.Name, e.target.value)}
+                     />
+                   </div>
+                 );
+               })}
+             </div>
+           );
+        })}
+      </>
+    );
+  };
+
+  const renderGlobalInspector = () => {
+    return (
+      <>
+        <div className="inspector-section">
+          <div className="inspector-section-title">Commands (Entry Points)</div>
+          {model?.commands?.map((cmd, i) => (
+            <div className="inspector-row" key={i}>
+              <label>{cmd.Name || 'Unnamed'}</label>
+              <input type="text" readOnly value={`Root Node: ${cmd['Root Node Index']}`} />
+            </div>
+          ))}
+        </div>
+
+        <div className="inspector-section">
+          <div className="inspector-section-title">Blackboard Parameters</div>
+          {Object.entries(model?.blackboard || {}).map(([type, params]) => {
+            if (!Array.isArray(params)) return null;
+            return params.map((bb, i) => (
+              <div className="inspector-row" key={`${type}-${i}`}>
+                <label>[{type.replace(' Parameters', '')}] {bb.Name}</label>
+                <input type="text" readOnly defaultValue={bb.Value ?? bb['Default Value'] ?? ''} />
+              </div>
+            ));
+          })}
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <div className="node-editor-inspector">
+      <div className="inspector-header">
+        {selectedNode ? `Editing: ${selectedNode.data?.label}` : 'Global Settings'}
+      </div>
+      <div className="inspector-content">
+        {selectedNode ? renderNodeInspector() : renderGlobalInspector()}
+      </div>
+    </div>
+  );
+});

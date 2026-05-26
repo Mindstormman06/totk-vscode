@@ -43,6 +43,32 @@ def handle_rpc(file_path: str, command_str: str):
             new_node.name = payload.get("name", "NewNode")
             ainb_file.add_node(new_node)
 
+        elif action == "edit_node_param":
+            node_idx = payload.get("nodeId")
+            param_group = payload.get("paramType") # e.g., 'float Input Parameters'
+            param_name = payload.get("paramName")
+            new_val = payload.get("newValue")
+
+            node = ainb_file.get_node(node_idx)
+            if node:
+                # Map the string 'float Input Parameters' to ParamType.Float
+                from ainb.param_common import ParamType
+                clean_type = param_group.lower().split(" ")[0]
+                
+                # Simple mapper to your enum
+                type_map = {
+                    "bool": ParamType.Bool,
+                    "float": ParamType.Float,
+                    "int": ParamType.Int,
+                    "string": ParamType.String,
+                    "vec3f": ParamType.Vec3f
+                }
+                
+                p_type = type_map.get(clean_type)
+                if p_type:
+                    # Update it using your API
+                    node.update_input_default(p_type, param_name, new_val)
+
         else:
             raise ValueError(f"Unknown RPC action: {action}")
 
