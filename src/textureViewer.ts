@@ -46,6 +46,13 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
         ? webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'icons', 'resize.svg'))
         : '';
 
+    const texW = meta?.imageInfo?.width ?? 256;
+    const texH = meta?.imageInfo?.height ?? 256;
+    const maxDim = 256;
+    const scale = maxDim / Math.max(texW, texH);
+    const scaledW = Math.round(texW * scale);
+    const scaledH = Math.round(texH * scale);
+
     const channelsSection = meta?.channels
         ? buildSection('Channels', buildChannelRows(meta.channels))
         : '';
@@ -119,9 +126,9 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
         background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 16px 16px;
         border: 1px solid var(--vscode-panel-border, #444);
     }
-    .image-panel img.scaled {
-        width: 256px;
-        height: 256px;
+    .image-panel img#texImg.scaled {
+        width: var(--scaled-w);
+        height: var(--scaled-h);
     }
     .no-image {
         width: 256px;
@@ -183,10 +190,10 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
             <button class="size-toggle" id="sizeBtn" onclick="toggleSize()" title="Toggle size">
                 <img src="${resizeIconUri}" alt="resize" width="16" height="16" />
             </button>
-            <span class="size-label" id="sizeLabel">256\u00d7256</span>
+            <span class="size-label" id="sizeLabel">${scaledW}\u00d7${scaledH}</span>
         </div>` : ''}
         ${imgSrc
-            ? `<img id="texImg" class="scaled" src="${imgSrc}" alt="${meta?.name ?? 'texture'}" />`
+            ? `<img id="texImg" class="scaled" style="--scaled-w:${scaledW}px;--scaled-h:${scaledH}px" src="${imgSrc}" alt="${meta?.name ?? 'texture'}" />`
             : '<div class="no-image">No preview</div>'}
     </div>
     <div class="props-panel">
@@ -202,10 +209,10 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
             scaled = !scaled;
             if (scaled) {
                 img.classList.add('scaled');
-                label.textContent = '256\u00d7256';
+                label.textContent = '${scaledW}\u00d7${scaledH}';
             } else {
                 img.classList.remove('scaled');
-                label.textContent = 'Original';
+                label.textContent = 'Original (${texW}\u00d7${texH})';
             }
         }
     </script>
