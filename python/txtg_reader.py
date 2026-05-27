@@ -73,7 +73,6 @@ def _read_surface_data(data: bytes, header_size: int, surface_count: int) -> lis
     if cursor + index_table_size + size_table_size > len(data):
         return []
 
-    # Skip (array_level, mip_level, const=1) entries.
     cursor += index_table_size
 
     sizes: list[int] = []
@@ -98,7 +97,6 @@ def _resolve_format(format_id: int, texture_setting2: int) -> tuple[str, int, in
     if not fmt:
         return (f'Unknown(0x{format_id:04X})', 0, 1, 1, 'unknown')
 
-    # Switch Toolbox special-case for some TOTK terrain TXTG.
     if format_id == 0x101 and texture_setting2 == 32628:
         return ('ASTC_8x5_UNORM', 16, 8, 5, 'astc')
     if format_id == 0x101 and texture_setting2 == 32631:
@@ -142,7 +140,6 @@ def _image_quality_score(pixels: bytes, width: int, height: int, raw_mode: str) 
             total_count += 1
     base = total_adj / max(1, total_count)
 
-    # Penalize periodic seam spikes (classic bad deswizzle artifact).
     seam_penalty = 0.0
     for period in (4, 8, 16, 32):
         if width <= period:
@@ -191,8 +188,6 @@ def read_txtg_texture_result(txtg_data: bytes, texture_name: str) -> dict:
     elif decoder_key == 'unknown' or bpp <= 0:
         decode_error = f'Unsupported TXTG format id 0x{format_id:04X}.'
     else:
-        # TXTG appears to store swizzle metadata differently across assets.
-        # Try multiple candidates and pick the least "striped" decode.
         decode_inputs: list[tuple[str, bytes, int]] = []
         for bh in _iter_block_height_candidates(texture_setting4):
             try:

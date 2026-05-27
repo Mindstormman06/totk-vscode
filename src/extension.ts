@@ -413,7 +413,7 @@ class SarcProvider implements vscode.FileSystemProvider {
             return;
         }
 
-        // SARC does not store empty directories explicitly.
+        // TODO: Allow creating folders in archives
         throw vscode.FileSystemError.NoPermissions(
             'Cannot create empty folders inside archives. Create a file in that folder instead.',
         );
@@ -701,7 +701,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 );
                 gameDumpTree?.onExternalIndexUpdated();
             } catch {
-                // Keep search functional with TypeScript fallback indexing.
+                // Pass
             } finally {
                 gameDumpTree?.setExternalIndexBuilding(false);
                 romfsIndexBuildPromise = undefined;
@@ -1040,7 +1040,7 @@ export async function activate(context: vscode.ExtensionContext) {
                     fileUris.push(uri);
                 }
             } catch {
-                // skip
+                // Pass
             }
         }
         if (fileUris.length === 0) {

@@ -2,8 +2,7 @@
 
 import re
 
-# Bare decimal literals above signed 64-bit max were emitted by older editor builds and
-# parse as the wrong BYML node type on save.
+
 _U64_DECIMAL_PATTERN = re.compile(
     r'(?P<prefix>:\s*|,\s*|\{\s*)(?P<num>\d{10,})(?=\s*(?:$|[,}\]]))',
     re.MULTILINE,

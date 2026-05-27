@@ -72,8 +72,7 @@ def _fmt_info(format_id: int) -> tuple[str, int, int, int, str]:
 
 
 # ---------------------------------------------------------------------------
-#  Pure-Python Tegra X1 block-linear deswizzle
-#  Adapted from aboood40091's public implementation.
+#  Tegra X1 block-linear deswizzle
 # ---------------------------------------------------------------------------
 
 def _div_round_up(x: int, d: int) -> int:

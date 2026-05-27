@@ -267,7 +267,6 @@ def _resolve_bntx_data(disk_archive_path: str, locator_path: str, romfs_path: st
     for i, seg in enumerate(segments):
         if not _is_bntx_name(seg):
             continue
-        # Walk SARC chain up to (but NOT including) the .bntx segment
         parent_locator = '/'.join(segments[:i]) if i > 0 else ''
         sarc, prefix, _, _ = resolve_sarc_view(
             disk_archive_path, parent_locator, romfs_path,

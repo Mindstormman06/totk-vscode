@@ -21,7 +21,7 @@ function getWasmPath(): string | undefined {
         candidates.push(path.join(sqlJsDir, 'dist', 'sql-wasm.wasm'));
         candidates.push(path.join(sqlJsDir, 'sql-wasm.wasm'));
     } catch {
-        // fall through
+        // Pass
     }
     for (const candidate of candidates) {
         if (fs.existsSync(candidate)) {

@@ -87,7 +87,7 @@ function isLikelyRealPythonExe(exePath: string): boolean {
     }
 }
 
-/** Run `where` / `which` in a shell so we see the same PATH as CMD, not VS Code's trimmed PATH. */
+// Run `where` / `which` in a shell so we see the same PATH as CMD, not VS Code's trimmed PATH.
 function resolveNamesViaShell(names: string[]): string[] {
     const found: string[] = [];
     const seen = new Set<string>();
