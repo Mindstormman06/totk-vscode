@@ -155,9 +155,9 @@ def read_byml_content(file_data, logical_path='', romfs_path=''):
             raise e
 
     try:
-        return format_byml_for_editor(byml_doc)
-    except Exception:
         return to_editor_text(byml_doc)
+    except Exception:
+        return format_byml_for_editor(byml_doc)
 
 
 def read_msbt_content(file_data, logical_path='', romfs_path=''):
