@@ -50,7 +50,6 @@ import {
     registerExternalToolSupport,
 } from './externalTools';
 import { getCoreExtensions, initCoreFsExtensions } from './coreFsExtensions';
-import { AinbNodeEditorProvider } from './nodeEditor/provider';
 import { TkprojEditorProvider } from './tkprojEditor';
 import { setExtensionPath } from './romfsIndex';
 import {
@@ -1011,21 +1010,6 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         archiveTree.onDidChangeRoots(() => {
             void importKnownProjectCanonicalPaths();
-        }),
-    );
-
-    context.subscriptions.push(
-        AinbNodeEditorProvider.register(context, async (info) => {
-            if (!isPathInsideArchive(info.diskPath)) {
-                return;
-            }
-            const diskArchivePath = getDiskArchivePath(info.diskPath);
-            const internalPath = getLocatorInsideDiskArchive(info.diskPath, diskArchivePath);
-            await runCanonicalPropagation({
-                diskArchivePath,
-                internalPath,
-                content: info.content,
-            });
         }),
     );
 

@@ -17,10 +17,6 @@ TKVSC is a Visual Studio Code extension for editing and browsing **Tears of the 
 - BAEV (Changes automatically applied to corresponding ASB)
 - XLINK
 
-#### Node Editor
-
-- AINB (definitely works btw)
-
 ---
 
 ### Activity Bar Tabs

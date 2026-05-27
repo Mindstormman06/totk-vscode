@@ -2,8 +2,8 @@
 .SYNOPSIS
     Full setup and build from a fresh clone of totk-vscode.
 .DESCRIPTION
-    1. Initializes git submodules (vendor/ainb)
-    2. Installs Node dependencies (root + node-editor)
+    1. Initializes git submodules
+    2. Installs Node dependencies (root)
     3. Creates a Python venv and installs Python dependencies
     4. Compiles the extension
     5. Optionally packages a .vsix
@@ -31,10 +31,6 @@ try {
     Write-Host "`n=== Installing Node dependencies (root) ===" -ForegroundColor Cyan
     npm install
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
-
-    Write-Host "`n=== Installing Node dependencies (node-editor) ===" -ForegroundColor Cyan
-    npm --prefix editors/node-editor install
-    if ($LASTEXITCODE -ne 0) { throw "npm install (node-editor) failed" }
 
     # ── 3. Python venv ─────────────────────────────────────────────────
     Write-Host "`n=== Setting up Python virtual environment ===" -ForegroundColor Cyan

@@ -1,17 +1,11 @@
 import io
 import json
 import os
-import re
 import sys
 import base64
 import tempfile
 import contextlib
 from pathlib import Path
-
-# Add vendor ainb library to sys.path so we can import it directly.
-_VENDOR_AINB = str(Path(__file__).resolve().parent.parent / 'vendor' / 'ainb')
-if _VENDOR_AINB not in sys.path:
-    sys.path.insert(0, _VENDOR_AINB)
 
 import oead
 from byml_editor_format import to_editor_text
@@ -189,137 +183,6 @@ def read_msbt_content(file_data, logical_path='', romfs_path=''):
         os.unlink(tmp_path)
 
 
-def read_ainb_content(file_data: bytes, logical_path: str = '', romfs_path: str = '') -> str:
-    from ainb.ainb import AINB as AINBFile
-
-    payload, _, _ = decompress_container(file_data, logical_path, romfs_path)
-    if len(payload) < 4:
-        return f'<Invalid AINB: {len(payload)} bytes>'
-
-    ainb_obj = AINBFile.from_binary(payload)
-    return ainb_obj.to_json()
-
-
-def _parse_event_color(tags: list[str]) -> str | None:
-    for tag in tags:
-        match = re.match(r'^EventColor_([A-Za-z]+)$', str(tag))
-        if match:
-            return match.group(1).lower()
-    return None
-
-
-def _extract_ainb_defs(byml_node, inherited_name: str | None, out: dict[str, dict]) -> None:
-    if isinstance(byml_node, oead.byml.Hash):
-        name = inherited_name
-        if 'Name' in byml_node:
-            raw_name = byml_node['Name']
-            if isinstance(raw_name, str) and raw_name.strip():
-                name = raw_name.strip()
-
-        raw_tags = byml_node['Tags'] if 'Tags' in byml_node else None
-        if isinstance(raw_tags, oead.byml.Array):
-            tags = [str(item) for item in raw_tags if isinstance(item, str)]
-            if tags and name:
-                current = out.get(name)
-                candidate = {
-                    'tags': tags,
-                    'eventColor': _parse_event_color(tags),
-                }
-                if current is None:
-                    out[name] = candidate
-                else:
-                    current_color = current.get('eventColor')
-                    candidate_color = candidate.get('eventColor')
-                    if not current_color and candidate_color:
-                        out[name] = candidate
-
-        for key in byml_node:
-            child = byml_node[key]
-            child_name = str(key) if isinstance(key, str) else name
-            _extract_ainb_defs(child, child_name, out)
-        return
-
-    if isinstance(byml_node, oead.byml.Array):
-        for item in byml_node:
-            _extract_ainb_defs(item, inherited_name, out)
-
-
-def _version_key(file_name: str) -> tuple[int, ...]:
-    match = re.match(r'^Node\.Product\.([^.]+)\.aidefn\.byml(?:\.zs)?$', file_name, flags=re.IGNORECASE)
-    if not match:
-        return ()
-    chunks = re.split(r'[^0-9]+', match.group(1))
-    values = [int(chunk) for chunk in chunks if chunk.isdigit()]
-    return tuple(values) if values else ()
-
-
-def read_ainb_definitions(romfs_path: str) -> dict:
-    if not romfs_path:
-        raise ValueError('Game dump path is not configured. Set totk-editor.romfsPath.')
-
-    node_def_dir = Path(romfs_path) / 'AI' / 'NodeDefinition'
-    if not node_def_dir.is_dir():
-        raise ValueError(f'NodeDefinition folder not found: {node_def_dir}')
-
-    candidates = list(node_def_dir.glob('Node.Product.*.aidefn.byml.zs'))
-    if not candidates:
-        candidates = list(node_def_dir.glob('Node.Product.*.aidefn.byml'))
-    if not candidates:
-        raise ValueError(
-            f'No Node.Product.*.aidefn.byml(.zs) file found in {node_def_dir}'
-        )
-
-    candidates.sort(
-        key=lambda p: (_version_key(p.name), p.name.lower()),
-        reverse=True,
-    )
-    parse_errors: list[str] = []
-    for source in candidates:
-        try:
-            raw = source.read_bytes()
-            payload = raw
-            try:
-                payload, _, _ = decompress_container(raw, str(source), romfs_path)
-            except Exception as decompress_error:
-                # Keep going for plain BYML files; fail hard for explicit .zs sources.
-                if source.name.lower().endswith('.zs'):
-                    detail = str(decompress_error).strip() or repr(decompress_error)
-                    raise ValueError(
-                        f'Failed to decompress {source.name}: {detail}'
-                    ) from decompress_error
-
-            if not (payload.startswith(b'BY') or payload.startswith(b'YB')):
-                magic = payload[:4].hex() if payload else 'empty'
-                raise ValueError(f'Unexpected BYML magic for {source.name}: {magic}')
-
-            byml_doc = oead.byml.from_binary(payload)
-            extracted: dict[str, dict] = {}
-            _extract_ainb_defs(byml_doc, None, extracted)
-            if not extracted:
-                raise ValueError(
-                    f'Parsed {source.name} but extracted 0 node definitions with Tags.'
-                )
-            return {
-                'sourcePath': str(source),
-                'definitions': [
-                    {
-                        'name': name,
-                        'tags': data.get('tags', []),
-                        'eventColor': data.get('eventColor'),
-                    }
-                    for name, data in sorted(extracted.items(), key=lambda item: item[0].lower())
-                ],
-            }
-        except Exception as parse_error:
-            detail = str(parse_error).strip() or repr(parse_error)
-            parse_errors.append(f'{source.name}: {detail}')
-
-    raise ValueError(
-        'Failed to load AINB node definitions from game dump. '
-        + ' | '.join(parse_errors[:5])
-    )
-
-
 def write_byml_bytes(orig_file_data, new_yaml, logical_path='', romfs_path=''):
     orig_file_data, is_zstd, is_yaz0 = decompress_container(
         orig_file_data, logical_path, romfs_path
@@ -411,8 +274,6 @@ def _file_kind(logical_path: str, file_data: bytes | None = None, romfs_path: st
         return 'aamp'
     if is_xlnk_extension(logical_path):
         return 'xlnk'
-    if lower.endswith('.ainb') or lower.endswith('.ainb.zs'):
-        return 'ainb'
     if file_data is not None:
         try:
             data, _, _ = decompress_container(file_data, logical_path, romfs_path)
@@ -443,8 +304,6 @@ def read_file_content(file_data: bytes, logical_path: str, sarc=None, romfs_path
         return read_baev_content_disk(logical_path, romfs_path)
     if kind == 'xlnk':
         return read_xlnk_content(file_data, logical_path, romfs_path)
-    if kind == 'ainb':
-        return read_ainb_content(file_data, logical_path, romfs_path)
     return (
         f'<Binary Data: {len(file_data)} bytes. '
         'Editable types: .byml, .bgyml, .msbt, .asb, .baev, .belnk, .bslnk, '
@@ -492,8 +351,6 @@ def write_file_content(logical_path: str, editor_text: str, sarc, is_sarc_compre
         writer = oead.SarcWriter.from_sarc(sarc)
         writer.files[logical_path] = new_bytes
         save_sarc(archive_path, writer.write()[1], is_sarc_compressed)
-    elif kind == 'ainb':
-        raise ValueError('AINB writing is not yet supported')
     else:
         raise ValueError(f'Cannot write file type: {logical_path}')
 
@@ -503,10 +360,7 @@ def main():
         command = sys.argv[1]
         romfs_path = get_romfs_path()
 
-        if command == 'ainb-defs':
-            print(json.dumps(read_ainb_definitions(romfs_path)))
-
-        elif command == 'build-romfs-index':
+        if command == 'build-romfs-index':
             from romfs_index import build_romfs_index
             output_path = sys.argv[2]
             print(json.dumps(build_romfs_index(romfs_path, output_path)))

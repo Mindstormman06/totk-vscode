@@ -2,8 +2,8 @@
 #
 # Full setup and build from a fresh clone of totk-vscode.
 #
-#   1. Initializes git submodules (vendor/ainb)
-#   2. Installs Node dependencies (root + node-editor)
+#   1. Initializes git submodules
+#   2. Installs Node dependencies (root)
 #   3. Creates a Python venv and installs Python dependencies
 #   4. Compiles the extension
 #   5. Optionally packages a .vsix (pass --skip-vsix to skip)
@@ -39,10 +39,6 @@ git submodule update --init --recursive
 echo ""
 echo "=== Installing Node dependencies (root) ==="
 npm install
-
-echo ""
-echo "=== Installing Node dependencies (node-editor) ==="
-npm --prefix editors/node-editor install
 
 # ── 3. Python venv ─────────────────────────────────────────────────
 echo ""
