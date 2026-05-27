@@ -61,9 +61,12 @@ import { propagateCanonicalSave } from './canonicalSavePropagation';
 import { normalizePath, pathsEqual } from './projectPaths';
 import type { DiskWriteNotification } from './totkDiskFs';
 import {
+    clearProjectImportState,
+    ensureProjectCanonicalOverlayExists,
     ensureProjectCanonicalImport,
     setProjectCanonicalOverlayExtensionPath,
 } from './projectCanonicalOverlay';
+
 
 function shouldOfferExternalToolPrompt(content: string): boolean {
     return content.startsWith('<Binary Data:') || content.startsWith('Error reading file:');
@@ -599,7 +602,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const CANONICAL_INDEX_STATE_KEY = 'totk-editor.canonicalIndexState';
     const ROMFS_INDEX_SCHEMA_VERSION = 3;
     const CANONICAL_INDEX_SCHEMA_VERSION = 3;
-    const PROJECT_CANONICAL_IMPORT_SCHEMA_VERSION = 2;
+    const PROJECT_CANONICAL_IMPORT_SCHEMA_VERSION = 3;
     let romfsIndexBuildPromise: Promise<void> | undefined;
     let canonicalIndexBuildPromise: Promise<void> | undefined;
     let gameDumpTree: ReturnType<typeof registerGameDumpTree> | undefined;
@@ -762,6 +765,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 );
                 output.appendLine('[canonical-save] Canonical path index rebuilt.');
                 invalidateCanonicalPathIndex();
+                await clearProjectImportState(projectCanonicalOverlayPath);
+                void importKnownProjectCanonicalPaths();
             } catch {
                 output.appendLine('[canonical-save] Failed to build canonical path index.');
             } finally {
@@ -807,9 +812,11 @@ export async function activate(context: vscode.ExtensionContext) {
     const importKnownProjectCanonicalPaths = async (): Promise<void> => {
         const pythonExe = getPython();
         const romfsPath = resolveRomfsPath();
+        await ensureProjectCanonicalOverlayExists(projectCanonicalOverlayPath);
         if (!archiveTree || !pythonExe || !romfsPath) {
             return;
         }
+        await buildCanonicalIndex();
         for (const root of archiveTree.getProjectRoots()) {
             await ensureProjectCanonicalImport({
                 overlayDbPath: projectCanonicalOverlayPath,
@@ -1007,8 +1014,9 @@ export async function activate(context: vscode.ExtensionContext) {
     registerIconThemeCommands(context);
 
     archiveTree = registerArchiveTree(context);
-    gameDumpTree = registerGameDumpTree(context, archiveTree);
+    gameDumpTree = registerGameDumpTree(context, archiveTree, () => importKnownProjectCanonicalPaths());
     gameDumpTree.setExternalIndexPath(romfsIndexPath);
+    void ensureProjectCanonicalOverlayExists(projectCanonicalOverlayPath);
     await migrateSarcWorkspaceFolders(archiveTree);
     void buildRomfsIndex();
     void buildCanonicalIndex();

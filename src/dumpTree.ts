@@ -426,6 +426,7 @@ export async function focusGameDumpSidebar(): Promise<void> {
 export function registerGameDumpTree(
     context: vscode.ExtensionContext,
     archiveTree: ArchiveTreeProvider,
+    onProjectCanonicalPathsChanged?: () => void | Promise<void>,
 ): GameDumpTreeProvider {
     extensionUri = context.extensionUri;
     const provider = new GameDumpTreeProvider();
@@ -532,6 +533,7 @@ export function registerGameDumpTree(
                         );
                     }
                     archiveTree.refresh();
+                    void onProjectCanonicalPathsChanged?.();
                 }
             },
         ),

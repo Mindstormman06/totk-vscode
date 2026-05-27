@@ -135,6 +135,11 @@ async function saveDb(dbPath: string): Promise<void> {
     await fs.promises.writeFile(dbPath, Buffer.from(data));
 }
 
+export async function ensureProjectCanonicalOverlayExists(overlayDbPath: string): Promise<void> {
+    await openDb(overlayDbPath);
+    await saveDb(overlayDbPath);
+}
+
 export async function queryProjectCanonicalArchives(
     overlayDbPath: string,
     projectRoot: string,
@@ -330,7 +335,10 @@ export async function ensureProjectCanonicalImport(
                     undefined,
                     options.bridgeEnv,
                 );
-            } catch {
+            } catch (error) {
+                options.output.appendLine(
+                    `[canonical-save] Failed to list entries for ${archive.archivePath}: ${error}`
+                );
                 listed = [];
             }
 
@@ -408,3 +416,10 @@ export async function ensureProjectCanonicalImport(
     importPromises.set(projectId, task);
     return task;
 }
+
+export async function clearProjectImportState(overlayDbPath: string): Promise<void> {
+    const database = await openDb(overlayDbPath);
+    database.run('DELETE FROM project_import_state');
+    await saveDb(overlayDbPath);
+}
+

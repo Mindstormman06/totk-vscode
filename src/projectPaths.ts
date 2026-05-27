@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getDiskArchivePath, isPathInsideArchive } from './archives';
+import { getDiskArchivePath, isArchiveFile, isPathInsideArchive } from './archives';
 
 export function normalizePath(filePath: string): string {
     return path.normalize(filePath);
@@ -48,6 +48,16 @@ function listSubdirectories(dirPath: string): string[] {
     }
 }
 
+function hasArchiveFiles(dirPath: string): boolean {
+    try {
+        return fs
+            .readdirSync(dirPath, { withFileTypes: true })
+            .some((entry) => entry.isFile() && isArchiveFile(entry.name));
+    } catch {
+        return false;
+    }
+}
+
 function findNamedRomfsFolder(base: string): string | undefined {
     for (const name of ROMFS_DIR_NAMES) {
         const candidate = path.join(base, name);
@@ -62,6 +72,10 @@ function findNamedRomfsFolder(base: string): string | undefined {
 export function findRomfsFolderUnder(projectRoot: string): string | undefined {
     const project = normalizePath(projectRoot);
     if (fs.existsSync(path.join(project, ZSDIC))) {
+        return project;
+    }
+
+    if (hasArchiveFiles(project)) {
         return project;
     }
 
