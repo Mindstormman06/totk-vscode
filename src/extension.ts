@@ -567,6 +567,21 @@ export async function activate(context: vscode.ExtensionContext) {
     const output = vscode.window.createOutputChannel('TOTK Editor');
     context.subscriptions.push(output);
 
+    // Register essential setup commands before any heavy initialization so
+    // users can always recover if activation fails later.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('totk-editor.setupPython', async () => {
+            const python = await ensurePythonEnvironment(context, true);
+            if (python) {
+                void vscode.window.showInformationMessage('TOTK Editor: Python environment is ready.');
+            } else {
+                await promptPythonSetup(context);
+            }
+        }),
+        vscode.commands.registerCommand('totk-editor.pickPython', () => pickDetectedPython(context)),
+        vscode.commands.registerCommand('totk-editor.browsePython', () => browseForPython(context)),
+    );
+
     registerDocumentLanguageModes(context);
     context.subscriptions.push(TkprojEditorProvider.register(context));
 
@@ -817,6 +832,43 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     };
 
+    context.subscriptions.push(
+        vscode.commands.registerCommand('totk-editor.rebuildRomfsIndex', async () => {
+            const romfsPath = resolveRomfsPath();
+            if (!romfsPath) {
+                void vscode.window.showWarningMessage(
+                    'Set totk-editor.romfsPath before rebuilding the search index.',
+                );
+                return;
+            }
+            const python = getPython();
+            if (!python) {
+                await promptPythonSetup(context);
+                return;
+            }
+            void vscode.window.showInformationMessage('TOTK Editor: Rebuilding RomFS search index...');
+            await buildRomfsIndex(true);
+            void vscode.window.showInformationMessage('TOTK Editor: RomFS search index rebuilt.');
+        }),
+        vscode.commands.registerCommand('totk-editor.rebuildCanonicalPathIndex', async () => {
+            const romfsPath = resolveRomfsPath();
+            if (!romfsPath) {
+                void vscode.window.showWarningMessage(
+                    'Set totk-editor.romfsPath before rebuilding the canonical path index.',
+                );
+                return;
+            }
+            const python = getPython();
+            if (!python) {
+                await promptPythonSetup(context);
+                return;
+            }
+            void vscode.window.showInformationMessage('TOTK Editor: Rebuilding canonical path index...');
+            await buildCanonicalIndex(true);
+            void vscode.window.showInformationMessage('TOTK Editor: Canonical path index rebuilt.');
+        }),
+    );
+
     const sarcProvider = new SarcProvider(bridgePath, getPython, runCanonicalPropagation);
     context.subscriptions.push(
         vscode.workspace.registerFileSystemProvider('sarc', sarcProvider, {
@@ -934,57 +986,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }),
     );
 
-    const setupPython = vscode.commands.registerCommand('totk-editor.setupPython', async () => {
-        const python = await ensurePythonEnvironment(context, true);
-        if (python) {
-            void vscode.window.showInformationMessage('TOTK Editor: Python environment is ready.');
-            void buildRomfsIndex();
-            void buildCanonicalIndex();
-            void importKnownProjectCanonicalPaths();
-        } else {
-            await promptPythonSetup(context);
-        }
-    });
-    context.subscriptions.push(
-        setupPython,
-        vscode.commands.registerCommand('totk-editor.pickPython', () => pickDetectedPython(context)),
-        vscode.commands.registerCommand('totk-editor.browsePython', () => browseForPython(context)),
-        vscode.commands.registerCommand('totk-editor.rebuildRomfsIndex', async () => {
-            const romfsPath = resolveRomfsPath();
-            if (!romfsPath) {
-                void vscode.window.showWarningMessage(
-                    'Set totk-editor.romfsPath before rebuilding the search index.',
-                );
-                return;
-            }
-            const python = getPython();
-            if (!python) {
-                await promptPythonSetup(context);
-                return;
-            }
-            void vscode.window.showInformationMessage('TOTK Editor: Rebuilding RomFS search index...');
-            await buildRomfsIndex(true);
-            void vscode.window.showInformationMessage('TOTK Editor: RomFS search index rebuilt.');
-        }),
-        vscode.commands.registerCommand('totk-editor.rebuildCanonicalPathIndex', async () => {
-            const romfsPath = resolveRomfsPath();
-            if (!romfsPath) {
-                void vscode.window.showWarningMessage(
-                    'Set totk-editor.romfsPath before rebuilding the canonical path index.',
-                );
-                return;
-            }
-            const python = getPython();
-            if (!python) {
-                await promptPythonSetup(context);
-                return;
-            }
-            void vscode.window.showInformationMessage('TOTK Editor: Rebuilding canonical path index...');
-            await buildCanonicalIndex(true);
-            void vscode.window.showInformationMessage('TOTK Editor: Canonical path index rebuilt.');
-        }),
-    );
-
     // Start Python bootstrap in background so activation doesn't block the extension host.
     void ensurePythonEnvironment(context).then(async (python) => {
         if (!python) {
@@ -994,9 +995,15 @@ export async function activate(context: vscode.ExtensionContext) {
         void buildRomfsIndex();
         void buildCanonicalIndex();
         void importKnownProjectCanonicalPaths();
+    }).catch(async () => {
+        await promptPythonSetup(context);
     });
 
-    await migrateOffStandaloneIconTheme(context);
+    try {
+        await migrateOffStandaloneIconTheme(context);
+    } catch (error) {
+        output.appendLine(`Icon theme migration failed: ${error}`);
+    }
     registerIconThemeCommands(context);
 
     archiveTree = registerArchiveTree(context);

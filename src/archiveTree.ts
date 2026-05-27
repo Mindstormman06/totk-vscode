@@ -189,8 +189,7 @@ export function registerArchiveTree(context: vscode.ExtensionContext): ArchiveTr
         }),
     );
 
-    context.subscriptions.push(
-        vscode.commands.registerCommand('totk-editor.addWorkspaceToArchives', () => {
+    const addWorkspaceToArchives = (): void => {
             const folder = vscode.workspace.workspaceFolders?.[0];
             if (!folder) {
                 void vscode.window.showWarningMessage(
@@ -206,7 +205,11 @@ export function registerArchiveTree(context: vscode.ExtensionContext): ArchiveTr
             }
             provider.addRoot(folder.uri);
             void focusArchiveSidebar();
-        }),
+    };
+    context.subscriptions.push(
+        vscode.commands.registerCommand('totk-editor.addWorkspaceToArchives', addWorkspaceToArchives),
+        // Backwards-compat alias for an older mistyped command id.
+        vscode.commands.registerCommand('totk-edit.addWorkspaceToArchives', addWorkspaceToArchives),
     );
 
     context.subscriptions.push(

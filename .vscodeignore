@@ -1,7 +1,6 @@
 .vscode/**
 .vscode-test/**
 out/**
-node_modules/**
 src/**
 .gitignore
 .yarnrc
@@ -21,3 +20,4 @@ graphics/
 vendor/py-xlink2
 .github/
 .venv/**
+context/

@@ -35,7 +35,7 @@ async function main() {
 		sourcesContent: false,
 		platform: 'node',
 		outfile: 'dist/extension.js',
-		external: ['vscode', 'oead', 'sql.js'],
+		external: ['vscode', 'sql.js'],
 		logLevel: 'silent',
 		plugins: [
 			/* add to the end of plugins array */

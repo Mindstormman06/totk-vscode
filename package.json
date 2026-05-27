@@ -21,6 +21,11 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:totk-editor.setupPython",
+    "onCommand:totk-editor.pickPython",
+    "onCommand:totk-editor.browsePython",
+    "onCommand:totk-editor.rebuildRomfsIndex",
+    "onCommand:totk-editor.rebuildCanonicalPathIndex",
     "workspaceContains:**/*.pack",
     "workspaceContains:**/*.sarc",
     "workspaceContains:**/*.genvb",
