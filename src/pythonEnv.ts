@@ -355,13 +355,14 @@ export async function pickDetectedPython(context: vscode.ExtensionContext): Prom
     await configurePythonPath(context, choice.launcher.executable);
 }
 
-function verifyVenvPython(venvPython: string): boolean {
+function verifyVenvPython(venvPython: string, vendorPymsbtPath: string): boolean {
     try {
+        const vendorPathLiteral = JSON.stringify(vendorPymsbtPath);
         execFileSync(
             venvPython,
             [
                 '-c',
-                'import oead, zstandard, mmh3; from pymsbt.msbt import MSBTFile',
+                `import sys; sys.path.insert(0, ${vendorPathLiteral}); import oead, zstandard, mmh3; from pymsbt.msbt import MSBTFile`,
             ],
             { stdio: 'pipe', timeout: 60_000 },
         );
@@ -394,6 +395,8 @@ async function bootstrapPython(context: vscode.ExtensionContext): Promise<string
         return undefined;
     }
 
+    const vendorPymsbtPath = path.join(context.extensionPath, 'vendor', 'pymsbt');
+
     const requirementsHash = readRequirementsHash(requirementsPath);
     const storageDir = context.globalStorageUri.fsPath;
     const venvDir = path.join(storageDir, VENV_DIR_NAME);
@@ -404,7 +407,7 @@ async function bootstrapPython(context: vscode.ExtensionContext): Promise<string
         fs.existsSync(venvPython) &&
         fs.existsSync(markerPath) &&
         fs.readFileSync(markerPath, 'utf-8').trim() === requirementsHash &&
-        verifyVenvPython(venvPython)
+        verifyVenvPython(venvPython, vendorPymsbtPath)
     ) {
         return venvPython;
     }
@@ -428,8 +431,8 @@ async function bootstrapPython(context: vscode.ExtensionContext): Promise<string
             createVenv(basePython, venvDir);
             installRequirements(venvPython, requirementsPath);
 
-            if (!verifyVenvPython(venvPython)) {
-                throw new Error('Python packages installed but import check failed (oead / zstandard / pymsbt).');
+            if (!verifyVenvPython(venvPython, vendorPymsbtPath)) {
+                throw new Error('Python packages installed but import check failed (oead / zstandard / vendor/pymsbt).');
             }
 
             fs.writeFileSync(markerPath, requirementsHash, 'utf-8');

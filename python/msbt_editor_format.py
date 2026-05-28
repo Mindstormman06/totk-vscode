@@ -1,6 +1,12 @@
 """Format MSBT label/text data for editor display (BYML-like key: value lines)."""
 
 import re
+import sys
+from pathlib import Path
+
+_VENDOR_PYMSBT = Path(__file__).resolve().parent.parent / 'vendor' / 'pymsbt'
+if str(_VENDOR_PYMSBT) not in sys.path:
+    sys.path.insert(0, str(_VENDOR_PYMSBT))
 
 from pymsbt.classes import TextCommand, TextComponent
 from msbt_tag_formatter import command_to_tag, tag_to_command
@@ -121,8 +127,22 @@ def _parse_value(raw: str) -> str:
     return _unescape_text(value)
 
 
+def _has_bare_quotes(text: str) -> bool:
+    """Return True if `text` contains a double-quote that is NOT inside a {{ }} tag block."""
+    import re
+    # Remove all {{...}} tag spans, then check for remaining quotes
+    stripped = re.sub(r'\{\{[^}]*(?:\}[^}][^}]*)?\}\}', '', text)
+    return '"' in stripped
+
+
 def _format_value(text: str) -> str:
-    if not text or any(ch in text for ch in ':#\n\r\t"') or text != text.strip():
+    needs_quoting = (
+        not text
+        or any(ch in text for ch in ':#\n\r\t')
+        or _has_bare_quotes(text)
+        or text != text.strip()
+    )
+    if needs_quoting:
         escaped = (
             text.replace('\\', '\\\\')
             .replace('"', '\\"')
