@@ -462,7 +462,7 @@
         "totk-editor.tagProductFormat": {
           "type": "string",
           "enum": ["json", "yaml"],
-          "default": "json",
+          "default": "yaml",
           "markdownDescription": "Format to use for Tag.Product.rstbl.byml files (JSON or YAML)."
         },
         "totk-editor.extraAampExtensions": {
