@@ -100,6 +100,7 @@ function getBridgeEnv(): NodeJS.ProcessEnv {
     return {
         ...process.env,
         TOTK_EDITOR_ROMFS: romfsPath,
+        TOTK_TAG_PRODUCT_FORMAT: config.get<string>('tagProductFormat', 'json'),
         TOTK_EXTRA_AAMP_EXTS: extraAamp.map((ext) => ext.replace(/^\./, '')).join(','),
     };
 }

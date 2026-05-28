@@ -459,6 +459,12 @@
           "default": "",
           "markdownDescription": "Path to your extracted game **RomFS** (game dump) folder. Must contain `Pack/ZsDic.pack.zs`. **Required** to open or save any `.zs` file (`.pack.zs`, `.byml.zs`, `.bcett.byml.zs`, etc.)."
         },
+        "totk-editor.tagProductFormat": {
+          "type": "string",
+          "enum": ["json", "yaml"],
+          "default": "json",
+          "markdownDescription": "Format to use for Tag.Product.rstbl.byml files (JSON or YAML)."
+        },
         "totk-editor.extraAampExtensions": {
           "type": "array",
           "items": {

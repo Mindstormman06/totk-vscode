@@ -10,6 +10,7 @@ from pathlib import Path
 import oead
 from byml_editor_format import to_editor_text
 from byml_yaml_utils import format_byml_for_editor, normalize_byml_u64_literals
+from tag_product_format import to_editor_text as tag_product_to_editor_text, from_editor_text as tag_product_from_editor_text
 from msbt_editor_format import to_editor_text as msbt_to_editor_text, from_editor_text as msbt_from_editor_text
 from asb_io import (
     read_asb_content,
@@ -154,6 +155,13 @@ def read_byml_content(file_data, logical_path='', romfs_path=''):
         else:
             raise e
 
+    file_name = Path(logical_path).name.lower()
+    if file_name.startswith('tag.product.') and 'rstbl' in file_name:
+        try:
+            return tag_product_to_editor_text(byml_doc)
+        except Exception:
+            pass
+
     try:
         return to_editor_text(byml_doc)
     except Exception:
@@ -199,6 +207,11 @@ def write_byml_bytes(orig_file_data, new_yaml, logical_path='', romfs_path=''):
     else:
         big_endian = False
         version = 7
+        
+    file_name = Path(logical_path).name.lower()
+    if file_name.startswith('tag.product.') and 'rstbl' in file_name:
+        new_byml_bytes = tag_product_from_editor_text(new_yaml, big_endian, version)
+        return compress_container(new_byml_bytes, logical_path, romfs_path, is_zstd, is_yaz0)
 
     byml_doc = oead.byml.from_text(normalize_byml_u64_literals(new_yaml))
 

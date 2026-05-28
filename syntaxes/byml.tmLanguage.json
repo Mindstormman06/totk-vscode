@@ -5,12 +5,30 @@
     { "include": "#comment" },
     { "include": "#bare-dash" },
     { "include": "#list-line" },
-    { "include": "#key-line" }
+    { "include": "#list-item" },
+    { "include": "#key-line" },
+    { "include": "#json-line" },
+    { "include": "#inline-value" }
   ],
   "repository": {
     "comment": {
       "match": "(#.*)$",
       "name": "comment.line.number-sign.byml"
+    },
+    "json-line": {
+      "match": "^(\\s*)(\"(?:\\\\.|[^\"\\\\])*\")(\\s*)(:)(\\s*)(.*)$",
+      "captures": {
+        "2": { "name": "entity.name.tag.byml" },
+        "4": { "name": "punctuation.separator.key-value.byml" },
+        "6": { "patterns": [{ "include": "#inline-value" }] }
+      }
+    },
+    "list-item": {
+      "match": "^(\\s*)-(\\s+)(.*)$",
+      "captures": {
+        "2": { "name": "punctuation.definition.list.begin.byml" },
+        "3": { "patterns": [{ "include": "#inline-value" }] }
+      }
     },
     "bare-dash": {
       "match": "^(\\s*)-(\\s*)$",
@@ -19,7 +37,7 @@
       }
     },
     "list-line": {
-      "match": "^(\\s*)-(\\s+)([A-Za-z_][\\w./-]*|\\d+)(\\s*)(:)(\\s*)(.*)$",
+      "match": "^(\\s*)-(\\s+)([^:\\s]+(?:\\s+[^:\\s]+)*)(\\s*)(:)(\\s*)(.*)$",
       "captures": {
         "2": { "name": "punctuation.definition.list.begin.byml" },
         "3": { "name": "entity.name.tag.byml" },
@@ -28,7 +46,7 @@
       }
     },
     "key-line": {
-      "match": "^(\\s*)([A-Za-z_][\\w./-]*|\\d+)(\\s*)(:)(\\s*)(.*)$",
+      "match": "^(\\s*)([^:\\s]+(?:\\s+[^:\\s]+)*)(\\s*)(:)(\\s*)(.*)$",
       "captures": {
         "2": { "name": "entity.name.tag.byml" },
         "4": { "name": "punctuation.separator.key-value.byml" },
@@ -67,7 +85,7 @@
     },
     "path-string": {
       "match": "[A-Za-z_][\\w./-]*",
-      "name": "string.unquoted.byml"
+      "name": "string.byml"
     }
   }
 }
