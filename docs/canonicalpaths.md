@@ -16,6 +16,9 @@ To prevent this issue in the past, mod developers would have to manually apply t
 
 ## Canonical Sync Settings
 
+### Enable Canonical Sync
+This setting enables or disables the Canonical Sync feature.
+
 ### Archive Type Blacklist
 Specific file extensions (before the `.zs` for romfs-exposed files) can be added to this list to exclude them from the canonical sync process. By default, `.sarc` is excluded to prevent localization changes from applying to all languages, and `.blarc` is excluded to ensure custom layout archives can be loaded, as the game will only load one at a time, preventing the issues with overlapping canonical paths mentioned above.
 
