@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 
 import oead
-
 from bntx_reader import is_bntx, list_textures, read_texture_data
 from zstd_totk import compress_container, decompress_container
 
@@ -307,7 +306,7 @@ def read_archive_file_bytes(disk_archive_path: str, file_path: str, romfs_path: 
 def _reject_bntx_mutation(disk_archive_path: str, operation: str, target_path: str = '') -> None:
     if _is_bntx_name(disk_archive_path):
         raise PermissionError(f'Cannot {operation} inside a BNTX texture container (read-only)')
-        
+
     if target_path:
         segments = [s for s in target_path.split('/') if s]
         if any(_is_bntx_name(seg) for seg in segments[:-1]):

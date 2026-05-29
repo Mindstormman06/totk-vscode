@@ -8,7 +8,6 @@ from pathlib import Path
 
 from archive_resolve import list_archive_files
 
-
 _ARCHIVE_EXTENSIONS = (
     '.pack',
     '.sarc',

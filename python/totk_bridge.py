@@ -1,38 +1,18 @@
+import base64
+import contextlib
 import io
 import json
 import os
 import sys
-import base64
 import tempfile
-import contextlib
 from pathlib import Path
 
 import oead
-from byml_editor_format import to_editor_text
-from byml_yaml_utils import format_byml_for_editor, normalize_byml_u64_literals
-from tag_product_format import to_editor_text as tag_product_to_editor_text, from_editor_text as tag_product_from_editor_text
-from msbt_editor_format import to_editor_text as msbt_to_editor_text, from_editor_text as msbt_from_editor_text
-from asb_io import (
-    read_asb_content,
-    read_baev_content,
-    read_asb_content_disk,
-    read_baev_content_disk,
-    write_asb_bytes,
-    write_baev_bytes,
-    write_asb_disk,
-    write_baev_disk,
-)
 from aamp_io import (
     is_aamp_binary,
     is_aamp_extension,
     read_aamp_content,
     write_aamp_bytes,
-)
-from xlink_io import (
-    is_xlnk_binary,
-    is_xlnk_extension,
-    read_xlnk_content,
-    write_xlnk_bytes,
 )
 from archive_resolve import (
     delete_archive_entry,
@@ -41,6 +21,28 @@ from archive_resolve import (
     read_archive_file_bytes,
     rename_archive_entry,
     write_archive_file_bytes,
+)
+from asb_io import (
+    read_asb_content,
+    read_asb_content_disk,
+    read_baev_content,
+    read_baev_content_disk,
+    write_asb_bytes,
+    write_asb_disk,
+    write_baev_bytes,
+    write_baev_disk,
+)
+from byml_editor_format import to_editor_text
+from byml_yaml_utils import format_byml_for_editor, normalize_byml_u64_literals
+from msbt_editor_format import from_editor_text as msbt_from_editor_text
+from msbt_editor_format import to_editor_text as msbt_to_editor_text
+from tag_product_format import from_editor_text as tag_product_from_editor_text
+from tag_product_format import to_editor_text as tag_product_to_editor_text
+from xlink_io import (
+    is_xlnk_binary,
+    is_xlnk_extension,
+    read_xlnk_content,
+    write_xlnk_bytes,
 )
 from zstd_totk import compress_container, decompress_container
 
@@ -205,7 +207,7 @@ def write_byml_bytes(orig_file_data, new_yaml, logical_path='', romfs_path=''):
     else:
         big_endian = False
         version = 7
-        
+
     file_name = Path(logical_path).name.lower()
     if file_name.startswith('tag.product.') and 'rstbl' in file_name:
         new_byml_bytes = tag_product_from_editor_text(new_yaml, big_endian, version)

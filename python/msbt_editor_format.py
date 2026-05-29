@@ -8,8 +8,8 @@ _VENDOR_PYMSBT = Path(__file__).resolve().parent.parent / 'vendor' / 'pymsbt'
 if str(_VENDOR_PYMSBT) not in sys.path:
     sys.path.insert(0, str(_VENDOR_PYMSBT))
 
-from pymsbt.classes import TextCommand, TextComponent
 from msbt_tag_formatter import command_to_tag, tag_to_command
+from pymsbt.classes import TextCommand, TextComponent
 
 _CMD_PATTERN = re.compile(
     r'\{cmd:([^:}]+):(\d+):(\d+):([^}]*)\}|\{\{([^}]+)\}\}',
@@ -70,7 +70,7 @@ def display_to_components(text: str) -> list:
                 magic, group, cmd_type, hexdata = 14, 0, 0, ''
         else:
             magic, group, cmd_type, hexdata = match.group(1), match.group(2), match.group(3), match.group(4)
-        
+
         hex_clean = hexdata.replace('0x', '').replace(' ', '') if hexdata else ''
         data_size = (len(hex_clean) + 1) // 2
         command = TextCommand.__new__(TextCommand)

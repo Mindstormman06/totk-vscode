@@ -1,6 +1,8 @@
-import struct
 import shlex
+import struct
+
 from msbt_tags import MSBT_TAGS_BY_ID, MSBT_TAGS_BY_NAME
+
 
 def _decode_str_arg(raw: str):
     """Strip the leading Nintendo ctrl char from a decoded str argument.
@@ -85,7 +87,7 @@ def command_to_tag(magic, group, type_, hexdata):
             if str_run_start is None:
                 str_run_start = i
         else:
-            str_run_start = None 
+            str_run_start = None
 
     for i, arg in enumerate(args_def):
         dtype = arg.get('dataType')

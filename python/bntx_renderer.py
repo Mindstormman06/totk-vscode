@@ -8,7 +8,7 @@ Deswizzle uses a pure-Python Tegra X1 block-linear implementation.
 import os
 import tempfile
 
-from bntx_reader import _parse_textures, _log
+from bntx_reader import _log, _parse_textures
 
 _FORMAT_TABLE: dict[int, tuple[str, int, int, int, str]] = {
     0x01: ('R4G4_UNORM',    1, 1, 1, 'r8'),
@@ -344,10 +344,10 @@ def _apply_channel_swizzle(
         from PIL import Image
         img = Image.frombytes('RGBA', (width, height), pixels, 'raw', raw_mode)
         bands = img.split()
-        
+
         zero_band = None
         one_band = None
-        
+
         def get_band(ch_val):
             nonlocal zero_band, one_band
             if ch_val == 0:

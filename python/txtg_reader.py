@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import io
 import zstandard as zstd
-
 from bntx_renderer import (
     _apply_channel_swizzle,
     _decode_pixels,
     _deswizzle_block_linear,
     _deswizzle_pitch_linear,
 )
-
 
 _TXTG_MAGIC = b'6PK0'
 
@@ -135,7 +132,7 @@ def _image_quality_score(pixels: bytes, width: int, height: int, raw_mode: str) 
         for x in range(1, width):
             total_adj += abs(lum[row_off + x] - lum[row_off + x - 1])
             total_count += 1
-            
+
     base = total_adj / max(1, total_count)
 
     seam_penalty = 0.0
@@ -248,8 +245,8 @@ def read_txtg_texture_result(txtg_data: bytes, texture_name: str) -> dict:
             block_height_log2 = best_bh
             from PIL import Image
             image = Image.frombytes('RGBA', (width, height), best_pixels, 'raw', best_raw_mode)
-            import tempfile
             import os
+            import tempfile
             safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in texture_name)
             fd, tmp_path = tempfile.mkstemp(prefix='totk-txtg-', suffix=f'-{safe}.png')
             try:

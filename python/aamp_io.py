@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 
 import oead
-
 from zstd_totk import compress_container, decompress_container
 
 _EXTENSIONS_PATH = Path(__file__).parent.parent / 'config' / 'aamp-extensions.json'

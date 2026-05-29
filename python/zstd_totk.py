@@ -5,8 +5,8 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-import zstandard as zstd
 import oead
+import zstandard as zstd
 
 _ZSTD_MAGIC = b'\x28\xb5\x2f\xfd'
 _YAZ0_MAGIC = b'Yaz0'

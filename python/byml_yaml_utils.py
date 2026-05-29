@@ -2,7 +2,6 @@
 
 import re
 
-
 _U64_DECIMAL_PATTERN = re.compile(
     r'(?P<prefix>:\s*|,\s*|\{\s*)(?P<num>\d{10,})(?=\s*(?:$|[,}\]]))',
     re.MULTILINE,
