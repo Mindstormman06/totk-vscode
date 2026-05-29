@@ -23,7 +23,7 @@ The **T**ears of the **K**ingdom **V**isual **S**tudio **C**ode Extension or **T
 
 Our core design philosophy creating this extension is **centralization of tooling concerns**, and **automating the boilerplate of the design process**.
 
-<sup><sub>It also pairs well with **TKMM!**</sup></sub>
+<sup></sub>It also pairs well with **TKMM!**</sup></sub>
 
 **TKVSC** GameBanana page: https://gamebanana.com/tools/22893.
 
@@ -71,7 +71,7 @@ Preview and edit subfiles of SARC and BNTX archives
 - BFRES Support (Preview, Editing.)
 - Audio Support (BARS, BWAV.)
 - Actor Tooling (Automating the process as much as possible.)
-- <sub><sup>PTCL/ELink support is being researched but not confirmed. This is uncharted territory.</sup></sub>
+- <sub></sup>PTCL/ELink support is being researched but not confirmed. This is uncharted territory.</sup></sub>
 
 ## Setup
 
