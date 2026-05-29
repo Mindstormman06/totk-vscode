@@ -225,7 +225,7 @@
       },
       {
         "command": "totk-editor.configureFilteringRules",
-        "title": "TOTK: Blacklist (Filter Rule)…"
+        "title": "Blacklist (Filter Rule)…"
       },
       {
         "command": "totk-editor.archiveDelete",

@@ -1,3 +1,4 @@
+.github/
 .vscode/**
 .vscode-test/**
 out/**
@@ -21,3 +22,8 @@ vendor/py-xlink2
 .github/
 .venv/**
 context/
+docs/
+images
+node_modules/
+.gitmodules
+scripts/

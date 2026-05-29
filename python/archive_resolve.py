@@ -42,9 +42,7 @@ def load_sarc_file(archive_path: str, romfs_path: str):
     return oead.Sarc(data), is_compressed
 
 
-def _save_sarc_file(archive_path: str, sarc: oead.Sarc, is_compressed: bool, romfs_path: str) -> None:
-    writer = oead.SarcWriter.from_sarc(sarc)
-    out_bytes = writer.write()[1]
+def _save_sarc_bytes(archive_path: str, out_bytes: bytes, is_compressed: bool, romfs_path: str) -> None:
     if is_compressed:
         out_bytes = compress_container(
             out_bytes,
@@ -66,13 +64,13 @@ def _get_file_bytes(sarc, internal_path: str) -> bytes:
     return bytes(entry.data)
 
 
-def _write_file_bytes(sarc: oead.Sarc, internal_path: str, data: bytes) -> oead.Sarc:
+def _write_file_bytes(sarc: oead.Sarc, internal_path: str, data: bytes) -> bytes:
     writer = oead.SarcWriter.from_sarc(sarc)
     writer.files[internal_path] = data
-    return oead.Sarc(writer.write()[1])
+    return writer.write()[1]
 
 
-def _delete_path(sarc: oead.Sarc, internal_path: str) -> oead.Sarc:
+def _delete_path(sarc: oead.Sarc, internal_path: str) -> bytes:
     writer = oead.SarcWriter.from_sarc(sarc)
     target = internal_path.strip('/')
     prefix = f'{target}/'
@@ -81,10 +79,10 @@ def _delete_path(sarc: oead.Sarc, internal_path: str) -> oead.Sarc:
         raise FileNotFoundError(target)
     for name in to_delete:
         del writer.files[name]
-    return oead.Sarc(writer.write()[1])
+    return writer.write()[1]
 
 
-def _rename_path(sarc: oead.Sarc, old_path: str, new_path: str) -> oead.Sarc:
+def _rename_path(sarc: oead.Sarc, old_path: str, new_path: str) -> bytes:
     writer = oead.SarcWriter.from_sarc(sarc)
     old_target = old_path.strip('/')
     new_target = new_path.strip('/')
@@ -108,14 +106,14 @@ def _rename_path(sarc: oead.Sarc, old_path: str, new_path: str) -> oead.Sarc:
             raise FileExistsError(destination)
 
     for source, destination in move_pairs:
-        writer.files[destination] = writer.files[source]
+        writer.files[destination] = bytes(writer.files[source])
         del writer.files[source]
 
-    return oead.Sarc(writer.write()[1])
+    return writer.write()[1]
 
 
 def _next_archive_index(segments: list[str]) -> int:
-    for index, segment in enumerate(segments):
+    for index, segment in enumerate(segments[:-1]):
         if _is_archive_name(segment):
             return index
     return -1
@@ -126,7 +124,7 @@ def _mutate_nested_set(
     segments: list[str],
     file_data: bytes,
     romfs_path: str,
-) -> oead.Sarc:
+) -> bytes:
     index = _next_archive_index(segments)
     if index < 0:
         relative = '/'.join(segments).strip('/')
@@ -137,8 +135,7 @@ def _mutate_nested_set(
     nested_data = _get_file_bytes(sarc, entry_path)
     payload, was_zstd, was_yaz0 = decompress_container(nested_data, entry_path, romfs_path)
     nested_sarc = oead.Sarc(payload)
-    nested_sarc = _mutate_nested_set(nested_sarc, remainder, file_data, romfs_path)
-    nested_out = oead.SarcWriter.from_sarc(nested_sarc).write()[1]
+    nested_out = _mutate_nested_set(nested_sarc, remainder, file_data, romfs_path)
     nested_out = compress_container(
         nested_out, entry_path, romfs_path, was_zstd=was_zstd, was_yaz0=was_yaz0
     )
@@ -149,7 +146,7 @@ def _mutate_nested_delete(
     sarc: oead.Sarc,
     segments: list[str],
     romfs_path: str,
-) -> oead.Sarc:
+) -> bytes:
     index = _next_archive_index(segments)
     if index < 0:
         relative = '/'.join(segments).strip('/')
@@ -160,8 +157,7 @@ def _mutate_nested_delete(
     nested_data = _get_file_bytes(sarc, entry_path)
     payload, was_zstd, was_yaz0 = decompress_container(nested_data, entry_path, romfs_path)
     nested_sarc = oead.Sarc(payload)
-    nested_sarc = _mutate_nested_delete(nested_sarc, remainder, romfs_path)
-    nested_out = oead.SarcWriter.from_sarc(nested_sarc).write()[1]
+    nested_out = _mutate_nested_delete(nested_sarc, remainder, romfs_path)
     nested_out = compress_container(
         nested_out, entry_path, romfs_path, was_zstd=was_zstd, was_yaz0=was_yaz0
     )
@@ -173,7 +169,7 @@ def _mutate_nested_rename(
     old_segments: list[str],
     new_segments: list[str],
     romfs_path: str,
-) -> oead.Sarc:
+) -> bytes:
     old_index = _next_archive_index(old_segments)
     new_index = _next_archive_index(new_segments)
 
@@ -195,8 +191,7 @@ def _mutate_nested_rename(
     nested_data = _get_file_bytes(sarc, old_entry)
     payload, was_zstd, was_yaz0 = decompress_container(nested_data, old_entry, romfs_path)
     nested_sarc = oead.Sarc(payload)
-    nested_sarc = _mutate_nested_rename(nested_sarc, old_remainder, new_remainder, romfs_path)
-    nested_out = oead.SarcWriter.from_sarc(nested_sarc).write()[1]
+    nested_out = _mutate_nested_rename(nested_sarc, old_remainder, new_remainder, romfs_path)
     nested_out = compress_container(
         nested_out, old_entry, romfs_path, was_zstd=was_zstd, was_yaz0=was_yaz0
     )
@@ -324,9 +319,14 @@ def read_archive_file_bytes(disk_archive_path: str, file_path: str, romfs_path: 
     return _get_file_bytes(sarc, lookup)
 
 
-def _reject_bntx_mutation(disk_archive_path: str, operation: str) -> None:
+def _reject_bntx_mutation(disk_archive_path: str, operation: str, target_path: str = '') -> None:
     if _is_bntx_name(disk_archive_path):
         raise PermissionError(f'Cannot {operation} inside a BNTX texture container (read-only)')
+        
+    if target_path:
+        segments = [s for s in target_path.split('/') if s]
+        if any(_is_bntx_name(seg) for seg in segments[:-1]):
+            raise PermissionError(f'Cannot {operation} textures inside a nested BNTX container (read-only)')
 
 
 def write_archive_file_bytes(
@@ -335,8 +335,8 @@ def write_archive_file_bytes(
     data: bytes,
     romfs_path: str,
 ) -> None:
-    _reject_bntx_mutation(disk_archive_path, 'write')
     file_path = _normalize_path(file_path)
+    _reject_bntx_mutation(disk_archive_path, 'write', file_path)
     if not file_path:
         raise ValueError('Missing file path')
 
@@ -350,8 +350,8 @@ def write_archive_file_bytes(
             was_yaz0=False,
         )
     sarc, is_compressed = load_sarc_file(disk_archive_path, romfs_path)
-    sarc = _mutate_nested_set(sarc, segments, data, romfs_path)
-    _save_sarc_file(disk_archive_path, sarc, is_compressed, romfs_path)
+    out_bytes = _mutate_nested_set(sarc, segments, data, romfs_path)
+    _save_sarc_bytes(disk_archive_path, out_bytes, is_compressed, romfs_path)
 
 
 def delete_archive_entry(
@@ -359,15 +359,15 @@ def delete_archive_entry(
     target_path: str,
     romfs_path: str,
 ) -> None:
-    _reject_bntx_mutation(disk_archive_path, 'delete')
     target_path = _normalize_path(target_path)
+    _reject_bntx_mutation(disk_archive_path, 'delete', target_path)
     if not target_path:
         raise ValueError('Missing target path')
 
     segments = [segment for segment in target_path.split('/') if segment]
     sarc, is_compressed = load_sarc_file(disk_archive_path, romfs_path)
-    sarc = _mutate_nested_delete(sarc, segments, romfs_path)
-    _save_sarc_file(disk_archive_path, sarc, is_compressed, romfs_path)
+    out_bytes = _mutate_nested_delete(sarc, segments, romfs_path)
+    _save_sarc_bytes(disk_archive_path, out_bytes, is_compressed, romfs_path)
 
 
 def rename_archive_entry(
@@ -376,14 +376,15 @@ def rename_archive_entry(
     new_path: str,
     romfs_path: str,
 ) -> None:
-    _reject_bntx_mutation(disk_archive_path, 'rename')
     old_path = _normalize_path(old_path)
     new_path = _normalize_path(new_path)
+    _reject_bntx_mutation(disk_archive_path, 'rename', old_path)
+    _reject_bntx_mutation(disk_archive_path, 'rename', new_path)
     if not old_path or not new_path:
         raise ValueError('Missing rename path')
 
     old_segments = [segment for segment in old_path.split('/') if segment]
     new_segments = [segment for segment in new_path.split('/') if segment]
     sarc, is_compressed = load_sarc_file(disk_archive_path, romfs_path)
-    sarc = _mutate_nested_rename(sarc, old_segments, new_segments, romfs_path)
-    _save_sarc_file(disk_archive_path, sarc, is_compressed, romfs_path)
+    out_bytes = _mutate_nested_rename(sarc, old_segments, new_segments, romfs_path)
+    _save_sarc_bytes(disk_archive_path, out_bytes, is_compressed, romfs_path)
