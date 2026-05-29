@@ -32,7 +32,7 @@
       "iconPath": "./texture.svg"
     },
     "_totk_tkvsc": {
-      "iconPath": "./logo.svg"
+      "iconPath": "./tkvsc.svg"
     }
   },
   "folderNames": {
@@ -149,7 +149,8 @@
     "bshop": "_totk_aamp",
     "bshop.zs": "_totk_aamp",
     "txtg": "_totk_texture",
-    "txtg.zs": "_totk_texture"
+    "txtg.zs": "_totk_texture",
+    "tkvsc": "_totk_tkvsc"
   },
   "fileNames": {
     ".tkproj": "_totk_tkproj",

@@ -46,7 +46,7 @@ export class ArchiveTreeItem extends vscode.TreeItem {
         } else if (isTkprojFile(entryName) && extensionUri) {
             this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'tkproj.svg');
         } else if (isTkvscFile(entryName) && extensionUri) {
-            this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'logo.svg');
+            this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'tkvsc.svg');
         }
     }
 }

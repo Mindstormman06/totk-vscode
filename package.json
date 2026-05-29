@@ -131,7 +131,7 @@
           ".tkproj"
         ],
         "aliases": [
-          "TOTK Project"
+          "TKMM Project"
         ],
         "icon": {
           "light": "./icons/tkproj.svg",
@@ -143,12 +143,15 @@
         "filenames": [
           ".tkvsc"
         ],
+        "extensions": [
+          ".tkvsc"
+        ],
         "aliases": [
-          "TKVSC Exclusions"
+          "TKVSC Project Config"
         ],
         "icon": {
-          "light": "./icons/logo.svg",
-          "dark": "./icons/logo.svg"
+          "light": "./icons/tkvsc.svg",
+          "dark": "./icons/tkvsc.svg"
         }
       },
       {
@@ -301,12 +304,6 @@
         "title": "TOTK: Choose External Tool for Current File"
       }
     ],
-    "submenus": [
-      {
-        "id": "totk-editor.addToProject",
-        "label": "Add to"
-      }
-    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -429,7 +426,7 @@
           "group": "5_export@1"
         },
         {
-          "submenu": "totk-editor.addToProject",
+          "command": "totk-editor.addDumpToProject",
           "when": "view == totk-editor.gameDump && (viewItem == dumpFile || viewItem == dumpVirtualFile || viewItem == dumpArchive)",
           "group": "2_add"
         },
@@ -442,12 +439,6 @@
           "command": "totk-editor.configureFilteringRules",
           "when": "view == totk-editor.gameDump && (viewItem == dumpFile || viewItem == dumpVirtualFile || viewItem == dumpArchive)",
           "group": "8_filter@1"
-        }
-      ],
-      "totk-editor.addToProject": [
-        {
-          "command": "totk-editor.addDumpToProject",
-          "when": "view == totk-editor.gameDump"
         }
       ]
     },
