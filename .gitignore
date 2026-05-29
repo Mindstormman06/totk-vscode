@@ -9,4 +9,4 @@ editors/node-editor/context/
 context/
 research
 .ruff_cache/
-totk_vscode_pythn.egg-info
+totk_vscode_python.egg-info/

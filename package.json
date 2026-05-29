@@ -4,7 +4,7 @@
   "publisher": "TKVSC-Team",
   "displayName": "TKVSC",
   "description": "Canonically Amazing",
-  "version": "0.0.1-beta",
+  "version": "0.0.1-beta.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/TKVSC-Team/totk-vscode"
@@ -505,6 +505,11 @@
           "default": "",
           "markdownDescription": "Path to your extracted game **RomFS** (game dump) folder. Must contain `Pack/ZsDic.pack.zs`. **Required** to open or save any `.zs` file (`.pack.zs`, `.byml.zs`, `.bcett.byml.zs`, etc.)."
         },
+        "totk-editor.createRomfsOnImport": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Automatically create a `romfs` folder when importing a project if there is no `romfs` or `exefs` folder next to the `.tkproj`."
+        },
         "totk-editor.tagProductFormat": {
           "type": "string",
           "enum": ["json", "yaml"],
@@ -673,8 +678,8 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
-    "package:vsix": "npm run package && vsce package",
-    "build": "npm run package && vsce package",
+    "package:vsix": "npm run package && vsce package --out out/",
+    "build": "npm run package && vsce package --out out/",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
