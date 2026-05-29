@@ -113,6 +113,38 @@ export class ArchiveTreeProvider implements vscode.TreeDataProvider<ArchiveTreeI
         }
     }
 
+    private async ensureRomfsFolder(rootUri: vscode.Uri): Promise<void> {
+        const createRomfs = vscode.workspace.getConfiguration('totk-editor').get<boolean>('createRomfsOnImport', true);
+        if (!createRomfs) {
+            return;
+        }
+
+        try {
+            const fileUri = rootUri.scheme === 'sarc' ? vscode.Uri.file(rootUri.fsPath) : rootUri;
+            const entries = await vscode.workspace.fs.readDirectory(fileUri);
+            
+            let hasTkproj = false;
+            let hasRomfsOrExefs = false;
+
+            for (const [name, type] of entries) {
+                const lowerName = name.toLowerCase();
+                if (lowerName.endsWith('.tkproj')) {
+                    hasTkproj = true;
+                }
+                if (type === vscode.FileType.Directory && (lowerName === 'romfs' || lowerName === 'exefs')) {
+                    hasRomfsOrExefs = true;
+                }
+            }
+
+            if (hasTkproj && !hasRomfsOrExefs) {
+                const romfsUri = vscode.Uri.joinPath(fileUri, 'romfs');
+                await vscode.workspace.fs.createDirectory(romfsUri);
+            }
+        } catch (e) {
+            console.error('Failed to ensure romfs folder:', e);
+        }
+    }
+
     addRoot(fileUri: vscode.Uri): void {
         const sarcUri = fileUri.scheme === 'sarc' ? fileUri : toSarcUri(fileUri);
         const key = sarcUri.fsPath;
@@ -124,6 +156,7 @@ export class ArchiveTreeProvider implements vscode.TreeDataProvider<ArchiveTreeI
         void this.persistRoots();
         this.onDidChangeTreeDataEmitter.fire(undefined);
         this.onDidChangeRootsEmitter.fire();
+        void this.ensureRomfsFolder(fileUri);
     }
 
     removeRoot(fileUri: vscode.Uri): void {
