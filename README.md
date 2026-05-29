@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/logo/Logo_FancyShading.png" width="300vh">
+  <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/logo/Logo_FancyShading.png?raw=true" width="300vh">
   <h1>Tears of the Kingdom VSCode Extension</h1>
   
   <a href="https://discord.gg/vwPnX2uB8s">
@@ -30,7 +30,7 @@ Our core design philosophy creating this extension is **centralization of toolin
 ## Features
 Preview and edit subfiles of SARC and BNTX archives
 
- <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/SARC_Edit.png" width="720vh">
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/SARC_Edit.png?raw=true" width="720vh">
 
 ### Supported Filetypes 
 
@@ -48,7 +48,7 @@ Preview and edit subfiles of SARC and BNTX archives
 
 ### Activity Bar Tabs
 
- <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/ActivityBarGuide.png" width="400vh">
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/ActivityBarGuide.png?raw=true" width="400vh">
 
 
 **Your Mods**
@@ -67,7 +67,7 @@ Preview and edit subfiles of SARC and BNTX archives
 - Visual editor for [TKMM](https://tkmm.org) `.tkproj` files
 - For files TKVSC does not support, such as `.bfres`, the user can choose external programs to open them in by default (separate from similar features in the OS).
 
- <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/tkproj_Edit.png" width="800vh">
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/tkproj_Edit.png?raw=true" width="800vh">
 
 ## Canonical Path Saving
 
