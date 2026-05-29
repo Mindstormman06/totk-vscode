@@ -27,6 +27,9 @@ Our core design philosophy creating this extension is **centralization of toolin
 
 **TKVSC** GameBanana page: https://gamebanana.com/tools/22893
 
+## DISCLAIMER
+**WE ARE NOT RESPONSIBLE IF YOUR MOD BREAKS. THIS TOOL IS IN ACTIVE BETA AND THINGS WILL BREAK. MAKE FREQUENT BACKUPS**
+
 ## Features
 Preview and edit subfiles of SARC and BNTX archives
 
