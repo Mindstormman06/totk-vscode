@@ -25,10 +25,12 @@ Our core design philosophy creating this extension is **centralization of toolin
 
 <sup></sub>It also pairs well with **TKMM!**</sup></sub>
 
-**TKVSC** GameBanana page: https://gamebanana.com/tools/22893.
+**TKVSC** GameBanana page: https://gamebanana.com/tools/22893
 
 ## Features
+Preview and edit subfiles of SARC and BNTX archives
 
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/SARC_Edit.png" width="720vh">
 
 ### Supported Filetypes 
 
@@ -46,7 +48,8 @@ Our core design philosophy creating this extension is **centralization of toolin
 
 ### Activity Bar Tabs
 
-Preview and edit subfiles of SARC and BNTX archives
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/ActivityBarGuide.png" width="400vh">
+
 
 **Your Mods**
 - Add the current folder open in VS Code to a list of Project Folders.
@@ -57,11 +60,22 @@ Preview and edit subfiles of SARC and BNTX archives
 ### Additional capabilities:
 
 - Archives within archives (e.g. a `.sarc` inside a `.pack`) can be browsed and edited
+- Search for romfs contents, including filenames inside of SARCs
 - Right-click a file within an archive to export it to a Project Folder.
 - File templates: Rather than the typical method of copying, pasting, and wiping an existing file to make a new file of the same format, TKVSC can create empty files of formats supported by the editor.
 - Preview `.bntx` subfiles and `.txtg` files as PNGs
 - Visual editor for [TKMM](https://tkmm.org) `.tkproj` files
 - For files TKVSC does not support, such as `.bfres`, the user can choose external programs to open them in by default (separate from similar features in the OS).
+
+ <img src="https://github.com/TKVSC-Team/totk-vscode/blob/main/graphics/Promo/tkproj_Edit.png" width="800vh">
+
+## Canonical Path Saving
+
+The canonical path of a file is where the file exists in the game's memory, as opposed to the romfs path which describes its location within a game dump. Using the romfs file located at `\Pack\Actor\Armor_001_Head.pack.zs\Component\ArmorParam\Armor_001_Head.game__component__ArmorParam.bgyml` as an example, the canonical path would be `\Component\ArmorParam\Armor_001_Head.game__component__ArmorParam.bgyml`.
+
+Anyone who has made changes to an upgradeable armor set, or to any parameter file that is parented to a file used in another actor pack, is familiar with needing to make the same edits to an identically named file in several different locations in order for everything to work nicely ingame. TKVSC builds a database of all canonical paths in your game dump and in each of your mod projects and automatically saves changes to all instances of a file's canonical path, pulling files in from the game dump as needed when it isn't already present in your mod project.
+
+To demonstrate with a direct comparison, modifying the defense of every level of the Champion's Leathers would take **15 file modifications without TKVSC**, and only **5 with TKVSC**.
 
 ## Planned Features
 
@@ -71,7 +85,8 @@ Preview and edit subfiles of SARC and BNTX archives
 - BFRES Support (Preview, Editing.)
 - Audio Support (BARS, BWAV.)
 - Actor Tooling (Automating the process as much as possible.)
-- <sub></sup>PTCL/ELink support is being researched but not confirmed. This is uncharted territory.</sup></sub>
+- Full romfs file content string searching
+- <sub></sup>PTCL/Effect support is being researched but not confirmed. This is uncharted territory.</sup></sub>
 
 ## Setup
 
