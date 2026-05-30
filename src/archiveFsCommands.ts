@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { toSarcUri, type ArchiveTreeItem } from './archiveTree';
 import { isAampExtension } from './aampExtensions';
-import { isPathInsideArchive, isArchiveFile, getDiskArchivePath, isArchiveFileName } from './archives';
+import { isPathInsideArchive, isArchiveFile, getDiskArchivePath, isArchiveFileName, isBntxTextureUri, isTxtgFile } from './archives';
 import { getDumpSelection, type DumpTreeItem } from './dumpTree';
 import { resolveRomfsPath } from './romfs';
 
@@ -151,6 +151,15 @@ function isDiskMutableItem(item: ArchiveTreeItem): boolean {
         item.contextValue === 'archiveDir' ||
         item.contextValue === 'archiveVirtualDir' ||
         item.contextValue === 'archiveRoot'
+    );
+}
+
+function isBntxOrTexToGo(uri: vscode.Uri): boolean {
+    const fsPath = uri.fsPath;
+    return (
+        isBntxTextureUri(uri) ||
+        isTxtgFile(fsPath) ||
+        /\.bntx(\.zs)?$/i.test(fsPath)
     );
 }
 
@@ -364,92 +373,134 @@ interface HistoryEntry {
 
 async function captureDirectory(dirUri: vscode.Uri): Promise<CapturedEntry[]> {
     const results: CapturedEntry[] = [];
-    async function traverse(currentUri: vscode.Uri, relativeParts: string[]) {
+    async function traverse(currentUri: vscode.Uri, relativeParts: string[]): Promise<void> {
         const entries = await vscode.workspace.fs.readDirectory(currentUri);
-        for (const [name, fileType] of entries) {
-            const childUri = vscode.Uri.joinPath(currentUri, name);
-            const childRelativeParts = [...relativeParts, name];
-            const relativePath = childRelativeParts.join('/');
-            const isDir = fileType === vscode.FileType.Directory && !isArchiveFile(name);
-            if (isDir) {
-                results.push({ type: 'dir', relativeUri: relativePath });
-                await traverse(childUri, childRelativeParts);
-            } else {
-                const content = await vscode.workspace.fs.readFile(childUri);
-                results.push({ type: 'file', relativeUri: relativePath, content });
-            }
-        }
+        await Promise.all(
+            entries.map(async ([name, fileType]) => {
+                const childUri = vscode.Uri.joinPath(currentUri, name);
+                const childRelativeParts = [...relativeParts, name];
+                const relativePath = childRelativeParts.join('/');
+                const isDir = fileType === vscode.FileType.Directory && !isArchiveFile(name);
+                if (isDir) {
+                    results.push({ type: 'dir', relativeUri: relativePath });
+                    await traverse(childUri, childRelativeParts);
+                } else {
+                    const content = await vscode.workspace.fs.readFile(childUri);
+                    results.push({ type: 'file', relativeUri: relativePath, content });
+                }
+            })
+        );
     }
     await traverse(dirUri, []);
     return results;
 }
 
+async function writeCapturedEntriesConcurrent(baseUri: vscode.Uri, entries: CapturedEntry[]): Promise<void> {
+    const isVirtual = baseUri.scheme === 'sarc' || isPathInsideArchive(baseUri.fsPath);
+
+    if (isVirtual) {
+        // Sequential writing to avoid concurrent write locks and oead 'bad optional access' corruption on the same archive file.
+        for (const entry of entries) {
+            const dest = vscode.Uri.joinPath(baseUri, entry.relativeUri);
+            if (isBntxOrTexToGo(dest)) {
+                continue;
+            }
+            if (entry.type === 'dir') {
+                await vscode.workspace.fs.createDirectory(dest);
+            } else {
+                await vscode.workspace.fs.writeFile(dest, entry.content!);
+            }
+        }
+    } else {
+        // Concurrent writing for high-performance writes to separate disk files.
+        const dirs = entries.filter((e) => e.type === 'dir');
+        const files = entries.filter((e) => e.type === 'file');
+
+        await Promise.all(
+            dirs.map(async (entry) => {
+                const dest = vscode.Uri.joinPath(baseUri, entry.relativeUri);
+                if (!isBntxOrTexToGo(dest)) {
+                    await vscode.workspace.fs.createDirectory(dest);
+                }
+            }),
+        );
+
+        await Promise.all(
+            files.map(async (entry) => {
+                const dest = vscode.Uri.joinPath(baseUri, entry.relativeUri);
+                if (!isBntxOrTexToGo(dest)) {
+                    await vscode.workspace.fs.writeFile(dest, entry.content!);
+                }
+            }),
+        );
+    }
+}
+
 async function createBackups(items: ArchiveTreeItem[]): Promise<DeletedItemBackup[]> {
     const backups: DeletedItemBackup[] = [];
-    for (const item of items) {
-        if (!item.resourceUri) {
-            continue;
-        }
-        const isVirtual = isPathInsideArchive(item.resourceUri.fsPath);
-        const resolvedUri = isVirtual ? item.resourceUri : toFileUri(item.resourceUri);
-        try {
-            const stat = await vscode.workspace.fs.stat(resolvedUri);
-            const isDirectory = stat.type === vscode.FileType.Directory && !isArchiveFile(resolvedUri.fsPath);
-            if (isDirectory) {
-                const dirEntries = await captureDirectory(resolvedUri);
-                backups.push({
-                    uri: resolvedUri,
-                    type: 'dir',
-                    dirEntries,
-                });
-            } else {
-                const fileContent = await vscode.workspace.fs.readFile(resolvedUri);
-                backups.push({
-                    uri: resolvedUri,
-                    type: 'file',
-                    fileContent,
-                });
+    await Promise.all(
+        items.map(async (item) => {
+            if (!item.resourceUri) {
+                return;
             }
-        } catch (err) {
-            console.error('Failed to create backup for ' + resolvedUri.toString(), err);
-        }
-    }
+            const isVirtual = isPathInsideArchive(item.resourceUri.fsPath);
+            const resolvedUri = isVirtual ? item.resourceUri : toFileUri(item.resourceUri);
+            try {
+                const stat = await vscode.workspace.fs.stat(resolvedUri);
+                const isDirectory = stat.type === vscode.FileType.Directory && !isArchiveFile(resolvedUri.fsPath);
+                if (isDirectory) {
+                    const dirEntries = await captureDirectory(resolvedUri);
+                    backups.push({
+                        uri: resolvedUri,
+                        type: 'dir',
+                        dirEntries,
+                    });
+                } else {
+                    const fileContent = await vscode.workspace.fs.readFile(resolvedUri);
+                    backups.push({
+                        uri: resolvedUri,
+                        type: 'file',
+                        fileContent,
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to create backup for ' + resolvedUri.toString(), err);
+            }
+        })
+    );
     return backups;
 }
 
 async function restoreBackups(backups: DeletedItemBackup[]): Promise<void> {
-    for (const backup of backups) {
-        if (backup.type === 'file') {
-            await vscode.workspace.fs.writeFile(backup.uri, backup.fileContent!);
-        } else {
-            await vscode.workspace.fs.createDirectory(backup.uri);
-            if (backup.dirEntries) {
-                for (const entry of backup.dirEntries) {
-                    const entryUri = vscode.Uri.joinPath(backup.uri, entry.relativeUri);
-                    if (entry.type === 'dir') {
-                        await vscode.workspace.fs.createDirectory(entryUri);
-                    } else {
-                        await vscode.workspace.fs.writeFile(entryUri, entry.content!);
-                    }
+    await Promise.all(
+        backups.map(async (backup) => {
+            if (backup.type === 'file') {
+                await vscode.workspace.fs.writeFile(backup.uri, backup.fileContent!);
+            } else {
+                await vscode.workspace.fs.createDirectory(backup.uri);
+                if (backup.dirEntries) {
+                    await writeCapturedEntriesConcurrent(backup.uri, backup.dirEntries);
                 }
             }
-        }
-    }
+        })
+    );
 }
 
 async function deleteBackups(backups: DeletedItemBackup[]): Promise<void> {
-    for (const backup of backups) {
-        try {
-            const stat = await vscode.workspace.fs.stat(backup.uri);
-            const isDirectory = stat.type === vscode.FileType.Directory && !isArchiveFile(backup.uri.fsPath);
-            await vscode.workspace.fs.delete(backup.uri, {
-                recursive: isDirectory,
-                useTrash: false,
-            });
-        } catch {
-            // Already deleted or not found
-        }
-    }
+    await Promise.all(
+        backups.map(async (backup) => {
+            try {
+                const stat = await vscode.workspace.fs.stat(backup.uri);
+                const isDirectory = stat.type === vscode.FileType.Directory && !isArchiveFile(backup.uri.fsPath);
+                await vscode.workspace.fs.delete(backup.uri, {
+                    recursive: isDirectory,
+                    useTrash: false,
+                });
+            } catch {
+                // Already deleted or not found
+            }
+        })
+    );
 }
 
 class ArchiveHistoryManager {
@@ -830,6 +881,336 @@ export function registerArchiveFileCommands(context: vscode.ExtensionContext): v
         vscode.commands.registerCommand('totk-editor.archiveRedo', async () => {
             await historyManager.redo();
         }),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'totk-editor.archiveImportFile',
+            async (item?: ArchiveTreeItem) => {
+                const folderUri = await resolveTargetFolder(item);
+                if (!folderUri) {
+                    return;
+                }
+                if (isBntxOrTexToGo(folderUri)) {
+                    void vscode.window.showWarningMessage('Import is not supported for BNTX or TexToGo containers.');
+                    return;
+                }
+                const picked = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    canSelectFiles: true,
+                    canSelectFolders: false,
+                    title: 'Select File to Import',
+                });
+                if (!picked?.[0]) {
+                    return;
+                }
+                const srcUri = picked[0];
+                const fileName = path.basename(srcUri.fsPath);
+                const destUri = vscode.Uri.joinPath(folderUri, fileName);
+                
+                if (isBntxOrTexToGo(destUri)) {
+                    void vscode.window.showWarningMessage('Cannot import BNTX or TexToGo files.');
+                    return;
+                }
+
+                try {
+                    let existedBefore = false;
+                    let oldContent: Uint8Array | undefined;
+                    try {
+                        const stat = await vscode.workspace.fs.stat(destUri);
+                        if (stat.type === vscode.FileType.File) {
+                            existedBefore = true;
+                        }
+                    } catch {
+                        // File doesn't exist
+                    }
+
+                    if (existedBefore) {
+                        const confirm = await vscode.window.showWarningMessage(
+                            `A file named "${fileName}" already exists. Overwrite?`,
+                            { modal: true },
+                            'Overwrite',
+                        );
+                        if (confirm !== 'Overwrite') {
+                            return;
+                        }
+                        oldContent = await vscode.workspace.fs.readFile(destUri);
+                    }
+
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Importing file ${fileName}...`,
+                            cancellable: false,
+                        },
+                        async () => {
+                            const content = await vscode.workspace.fs.readFile(srcUri);
+                            await vscode.workspace.fs.writeFile(destUri, content);
+
+                            historyManager.push({
+                                description: `Import file ${fileName}`,
+                                undo: async () => {
+                                    if (existedBefore && oldContent) {
+                                        await vscode.workspace.fs.writeFile(destUri, oldContent);
+                                    } else {
+                                        await vscode.workspace.fs.delete(destUri, { recursive: false, useTrash: false });
+                                    }
+                                },
+                                redo: async () => {
+                                    await vscode.workspace.fs.writeFile(destUri, content);
+                                },
+                            });
+                        }
+                    );
+
+                    void vscode.window.showInformationMessage(`Successfully imported file: ${fileName}`);
+                    refreshArchives();
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    void vscode.window.showErrorMessage(`Import file failed: ${message}`);
+                }
+            },
+        ),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'totk-editor.archiveImportFolder',
+            async (item?: ArchiveTreeItem) => {
+                const folderUri = await resolveTargetFolder(item);
+                if (!folderUri) {
+                    return;
+                }
+                if (isBntxOrTexToGo(folderUri)) {
+                    void vscode.window.showWarningMessage('Import is not supported for BNTX or TexToGo containers.');
+                    return;
+                }
+                const picked = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    canSelectFiles: false,
+                    canSelectFolders: true,
+                    title: 'Select Folder to Import',
+                });
+                if (!picked?.[0]) {
+                    return;
+                }
+                const srcUri = picked[0];
+                const folderName = path.basename(srcUri.fsPath);
+                const destUri = vscode.Uri.joinPath(folderUri, folderName);
+
+                if (isBntxOrTexToGo(destUri)) {
+                    void vscode.window.showWarningMessage('Cannot import BNTX or TexToGo folders.');
+                    return;
+                }
+
+                try {
+                    let existedBefore = false;
+                    let oldBackup: DeletedItemBackup | undefined;
+                    try {
+                        const stat = await vscode.workspace.fs.stat(destUri);
+                        existedBefore = true;
+                        
+                        const confirm = await vscode.window.showWarningMessage(
+                            `A folder named "${folderName}" already exists. Overwrite and merge?`,
+                            { modal: true },
+                            'Merge/Overwrite',
+                        );
+                        if (confirm !== 'Merge/Overwrite') {
+                            return;
+                        }
+
+                        const isDir = stat.type === vscode.FileType.Directory && !isArchiveFile(destUri.fsPath);
+                        if (isDir) {
+                            const dirEntries = await captureDirectory(destUri);
+                            oldBackup = { uri: destUri, type: 'dir', dirEntries };
+                        } else {
+                            const fileContent = await vscode.workspace.fs.readFile(destUri);
+                            oldBackup = { uri: destUri, type: 'file', fileContent };
+                        }
+                    } catch {
+                        // Doesn't exist
+                    }
+
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Importing folder ${folderName}...`,
+                            cancellable: false,
+                        },
+                        async () => {
+                            const srcEntries = await captureDirectory(srcUri);
+                            await vscode.workspace.fs.createDirectory(destUri);
+                            await writeCapturedEntriesConcurrent(destUri, srcEntries);
+
+                            historyManager.push({
+                                description: `Import folder ${folderName}`,
+                                undo: async () => {
+                                    await vscode.workspace.fs.delete(destUri, { recursive: true, useTrash: false });
+                                    if (existedBefore && oldBackup) {
+                                        if (oldBackup.type === 'file') {
+                                            await vscode.workspace.fs.writeFile(destUri, oldBackup.fileContent!);
+                                        } else {
+                                            await vscode.workspace.fs.createDirectory(destUri);
+                                            if (oldBackup.dirEntries) {
+                                                await writeCapturedEntriesConcurrent(destUri, oldBackup.dirEntries);
+                                            }
+                                        }
+                                    }
+                                },
+                                redo: async () => {
+                                    if (existedBefore) {
+                                        await vscode.workspace.fs.delete(destUri, { recursive: true, useTrash: false });
+                                    }
+                                    await vscode.workspace.fs.createDirectory(destUri);
+                                    await writeCapturedEntriesConcurrent(destUri, srcEntries);
+                                },
+                            });
+                        }
+                    );
+
+                    void vscode.window.showInformationMessage(`Successfully imported folder: ${folderName}`);
+                    refreshArchives();
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    void vscode.window.showErrorMessage(`Import folder failed: ${message}`);
+                }
+            },
+        ),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'totk-editor.archiveReplaceFile',
+            async (item?: ArchiveTreeItem) => {
+                const entry = selectedItems(item)[0];
+                if (!entry?.resourceUri || !isDiskMutableItem(entry)) {
+                    return;
+                }
+                const targetUri = entry.resourceUri;
+                if (isBntxOrTexToGo(targetUri)) {
+                    void vscode.window.showWarningMessage('Replace is not supported for BNTX or TexToGo files.');
+                    return;
+                }
+
+                const picked = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    canSelectFiles: true,
+                    canSelectFolders: false,
+                    title: `Select Replacement for ${entry.entryName}`,
+                });
+                if (!picked?.[0]) {
+                    return;
+                }
+                const srcUri = picked[0];
+
+                 try {
+                    let oldContent: Uint8Array;
+                    let newContent: Uint8Array;
+
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Replacing file ${entry.entryName}...`,
+                            cancellable: false,
+                        },
+                        async () => {
+                            oldContent = await vscode.workspace.fs.readFile(targetUri);
+                            newContent = await vscode.workspace.fs.readFile(srcUri);
+                            await vscode.workspace.fs.writeFile(targetUri, newContent);
+
+                            historyManager.push({
+                                description: `Replace file ${entry.entryName}`,
+                                undo: async () => {
+                                    await vscode.workspace.fs.writeFile(targetUri, oldContent);
+                                },
+                                redo: async () => {
+                                    await vscode.workspace.fs.writeFile(targetUri, newContent);
+                                },
+                            });
+                        }
+                    );
+
+                    void vscode.window.showInformationMessage(`Successfully replaced file: ${entry.entryName}`);
+                    refreshArchives();
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    void vscode.window.showErrorMessage(`Replace file failed: ${message}`);
+                }
+            },
+        ),
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            'totk-editor.archiveReplaceFolder',
+            async (item?: ArchiveTreeItem) => {
+                const entry = selectedItems(item)[0];
+                if (!entry?.resourceUri || !isDiskMutableItem(entry)) {
+                    return;
+                }
+                const targetUri = entry.resourceUri;
+                if (isBntxOrTexToGo(targetUri)) {
+                    void vscode.window.showWarningMessage('Replace is not supported for BNTX or TexToGo folders.');
+                    return;
+                }
+
+                const picked = await vscode.window.showOpenDialog({
+                    canSelectMany: false,
+                    canSelectFiles: false,
+                    canSelectFolders: true,
+                    title: `Select Replacement Folder for ${entry.entryName}`,
+                });
+                if (!picked?.[0]) {
+                    return;
+                }
+                const srcUri = picked[0];
+
+                try {
+                    let oldEntries: CapturedEntry[];
+                    let srcEntries: CapturedEntry[];
+
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Replacing folder ${entry.entryName}...`,
+                            cancellable: false,
+                        },
+                        async () => {
+                            oldEntries = await captureDirectory(targetUri);
+                            const oldBackup: DeletedItemBackup = { uri: targetUri, type: 'dir', dirEntries: oldEntries };
+
+                            srcEntries = await captureDirectory(srcUri);
+
+                            await vscode.workspace.fs.delete(targetUri, { recursive: true, useTrash: false });
+                            await vscode.workspace.fs.createDirectory(targetUri);
+                            await writeCapturedEntriesConcurrent(targetUri, srcEntries);
+
+                            historyManager.push({
+                                description: `Replace folder ${entry.entryName}`,
+                                undo: async () => {
+                                    await vscode.workspace.fs.delete(targetUri, { recursive: true, useTrash: false });
+                                    await vscode.workspace.fs.createDirectory(targetUri);
+                                    if (oldBackup.dirEntries) {
+                                        await writeCapturedEntriesConcurrent(targetUri, oldBackup.dirEntries);
+                                    }
+                                },
+                                redo: async () => {
+                                    await vscode.workspace.fs.delete(targetUri, { recursive: true, useTrash: false });
+                                    await vscode.workspace.fs.createDirectory(targetUri);
+                                    await writeCapturedEntriesConcurrent(targetUri, srcEntries);
+                                },
+                            });
+                        }
+                    );
+
+                    void vscode.window.showInformationMessage(`Successfully replaced folder: ${entry.entryName}`);
+                    refreshArchives();
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    void vscode.window.showErrorMessage(`Replace folder failed: ${message}`);
+                }
+            },
+        ),
     );
 }
 

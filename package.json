@@ -340,6 +340,22 @@
       {
         "command": "totk-editor.externalTools.choose",
         "title": "TOTK: Choose External Tool for Current File"
+      },
+      {
+        "command": "totk-editor.archiveImportFile",
+        "title": "Import File..."
+      },
+      {
+        "command": "totk-editor.archiveImportFolder",
+        "title": "Import Folder..."
+      },
+      {
+        "command": "totk-editor.archiveReplaceFile",
+        "title": "Replace File..."
+      },
+      {
+        "command": "totk-editor.archiveReplaceFolder",
+        "title": "Replace Folder..."
       }
     ],
     "viewsContainers": {
@@ -436,6 +452,16 @@
           "group": "1_create@2"
         },
         {
+          "command": "totk-editor.archiveImportFile",
+          "when": "view == totk-editor.archives && (viewItem == archiveRoot || viewItem == archiveDir || viewItem == archiveVirtualDir || viewItem == archivePackage)",
+          "group": "1_create@3"
+        },
+        {
+          "command": "totk-editor.archiveImportFolder",
+          "when": "view == totk-editor.archives && (viewItem == archiveRoot || viewItem == archiveDir || viewItem == archiveVirtualDir || viewItem == archivePackage)",
+          "group": "1_create@4"
+        },
+        {
           "command": "totk-editor.archiveRename",
           "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
           "group": "7_modification@1"
@@ -444,6 +470,16 @@
           "command": "totk-editor.archiveDelete",
           "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
           "group": "7_modification@2"
+        },
+        {
+          "command": "totk-editor.archiveReplaceFile",
+          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile)",
+          "group": "7_modification@3"
+        },
+        {
+          "command": "totk-editor.archiveReplaceFolder",
+          "when": "view == totk-editor.archives && (viewItem == archiveDir || viewItem == archiveVirtualDir)",
+          "group": "7_modification@4"
         },
         {
           "command": "totk-editor.archiveCopy",
