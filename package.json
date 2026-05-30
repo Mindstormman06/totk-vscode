@@ -484,6 +484,17 @@
     "configuration": {
       "title": "TOTK Editor",
       "properties": {
+        "totk-editor.logLevel": {
+          "type": "string",
+          "enum": ["Debug", "Info", "Warning", "Error"],
+          "default": "Info",
+          "markdownDescription": "Determine the verbosity of logs written to the Output Channel."
+        },
+        "totk-editor.enableToastNotifications": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable pop-up toast notifications in VS Code for Warnings and Errors."
+        },
         "totk-editor.pythonPath": {
           "type": "string",
           "default": "",

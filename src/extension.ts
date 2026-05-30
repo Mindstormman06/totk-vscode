@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { logger } from './logger';
 import * as fs from 'fs';
 import { Buffer } from 'buffer';
 import {
@@ -183,7 +184,7 @@ class SarcProvider implements vscode.FileSystemProvider {
         const cacheKey = archiveCacheKey(diskArchive, locator);
         let files = this.fileCache.get(cacheKey);
         if (!files) {
-            console.log(`Loading archive: ${diskArchive} @ ${locator || '(root)'}`);
+            logger.info(`Loading archive: ${diskArchive} @ ${locator || '(root)'}`);
             files = await runBridgeJsonAsync<string[]>(
                 this.requirePython(),
                 this.bridgePath,
@@ -192,7 +193,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                 getBridgeEnv(),
             );
             this.fileCache.set(cacheKey, files!);
-            console.log(`Mapped ${files!.length} paths inside archive view.`);
+            logger.info(`Mapped ${files!.length} paths inside archive view.`);
         }
         return files;
     }
@@ -376,6 +377,7 @@ class SarcProvider implements vscode.FileSystemProvider {
         if (!this.usesArchiveListing(fsPath)) {
             if (isEditableFile(fsPath)) {
                 try {
+                    logger.showProcessingToast(fsPath);
                     const content = await runBridgeReadContentAsync(
                         this.requirePython(),
                         this.bridgePath,
@@ -405,7 +407,10 @@ class SarcProvider implements vscode.FileSystemProvider {
         const filePath = this.getLocator(fsPath, diskArchive);
 
         try {
-            console.log(`Reading: ${diskArchive} / ${filePath}`);
+            logger.info(`Reading: ${diskArchive} / ${filePath}`);
+            if (isEditableFile(fsPath)) {
+                logger.showProcessingToast(fsPath);
+            }
             const content = await runBridgeReadContentAsync(
                 this.requirePython(),
                 this.bridgePath,
@@ -422,7 +427,7 @@ class SarcProvider implements vscode.FileSystemProvider {
 
             return new TextEncoder().encode(content);
         } catch (error) {
-            console.error('Python Read Error:', error);
+            logger.error('Python Read Error:', error as Error);
             const message = error instanceof Error ? error.message : String(error);
             return new TextEncoder().encode(
                 formatExternalToolPrompt(filePath, `Error reading file: ${message}`),
@@ -460,9 +465,11 @@ class SarcProvider implements vscode.FileSystemProvider {
             if (isEditableFile(fsPath)) {
                 if (!fs.existsSync(fsPath)) {
                     fs.writeFileSync(fsPath, content);
+                    logger.showSavedToast(fsPath);
                     return;
                 }
                 try {
+                    logger.showProcessingToast(fsPath);
                     const text = new TextDecoder().decode(content);
                     await runBridgeJsonAsync<{ success: boolean }>(
                         this.requirePython(),
@@ -471,6 +478,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                         text,
                         getBridgeEnv(),
                     );
+                    logger.showSavedToast(fsPath);
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     vscode.window.showErrorMessage(`Failed to save: ${message}`);
@@ -486,8 +494,9 @@ class SarcProvider implements vscode.FileSystemProvider {
         const filePath = this.getLocator(fsPath, diskArchive);
 
         try {
-            console.log(`Writing back to: ${diskArchive} / ${filePath}`);
+            logger.info(`Writing back to: ${diskArchive} / ${filePath}`);
             if (isEditableFile(fsPath) && content.length > 0 && !isLikelyBinaryBuffer(content)) {
+                logger.showProcessingToast(fsPath);
                 const yamlContent = new TextDecoder().decode(content);
                 await runBridgeJsonAsync<{ success: boolean }>(
                     this.requirePython(),
@@ -502,6 +511,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                     content,
                     textContent: yamlContent,
                 });
+                logger.showSavedToast(fsPath);
             } else {
                 const encoded = Buffer.from(content).toString('base64');
                 await runBridgeJsonAsync<{ success: boolean }>(
@@ -523,9 +533,9 @@ class SarcProvider implements vscode.FileSystemProvider {
                     this.fileCache.delete(key);
                 }
             }
-            console.log('Successfully saved and repacked SARC!');
+            logger.info('Successfully saved and repacked SARC!');
         } catch (error) {
-            console.error('Python Write Error:', error);
+            logger.error('Python Write Error:', error as Error);
             vscode.window.showErrorMessage(`Failed to save: ${error}`);
             throw vscode.FileSystemError.Unavailable(error as string);
         }
@@ -642,15 +652,25 @@ class SarcProvider implements vscode.FileSystemProvider {
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+    logger.init(context);
+    logger.info('Activating TOTK Editor extension...');
     initAampExtensions(context.extensionPath);
     initCoreFsExtensions(context.extensionPath);
     initTextureViewer(context.extensionUri);
     setExtensionPath(context.extensionPath);
     setCanonicalIndexExtensionPath(context.extensionPath);
     setProjectCanonicalOverlayExtensionPath(context.extensionPath);
-    console.log('TOTK Editor is now active!');
-    const output = vscode.window.createOutputChannel('TOTK Editor');
-    context.subscriptions.push(output);
+    logger.info('TOTK Editor dependencies initialized.');
+    
+    const output: vscode.OutputChannel = {
+        name: 'TOTK Editor',
+        append: (value: string) => logger.info(value),
+        appendLine: (value: string) => logger.info(value),
+        clear: () => {},
+        show: () => logger.show(),
+        hide: () => {},
+        dispose: () => {}
+    } as any;
 
     context.subscriptions.push(
         vscode.commands.registerCommand('totk-editor.setupPython', async () => {
@@ -788,6 +808,7 @@ export async function activate(context: vscode.ExtensionContext) {
         gameDumpTree.setExternalIndexBuilding(true);
         romfsIndexBuildPromise = (async () => {
             try {
+                logger.info(`Starting RomFS search index build at: ${romfsIndexPath}`);
                 await fs.promises.mkdir(context.globalStorageUri.fsPath, { recursive: true });
                 await runBridgeJsonAsync<{ path: string; count: number }>(
                     pythonExe,
@@ -802,9 +823,10 @@ export async function activate(context: vscode.ExtensionContext) {
                     romfsPath,
                     ROMFS_INDEX_SCHEMA_VERSION,
                 );
+                logger.info('RomFS search index built successfully.');
                 gameDumpTree?.onExternalIndexUpdated();
-            } catch {
-                // Pass
+            } catch (err) {
+                logger.error('Failed to build RomFS search index:', err as Error);
             } finally {
                 gameDumpTree?.setExternalIndexBuilding(false);
                 romfsIndexBuildPromise = undefined;
@@ -834,6 +856,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
         canonicalIndexBuildPromise = (async () => {
             try {
+                logger.info(`Starting canonical path index build at: ${canonicalIndexPath}`);
                 await fs.promises.mkdir(context.globalStorageUri.fsPath, { recursive: true });
                 await runBridgeJsonAsync<{ path: string; count: number }>(
                     pythonExe,
@@ -848,12 +871,12 @@ export async function activate(context: vscode.ExtensionContext) {
                     romfsPath,
                     CANONICAL_INDEX_SCHEMA_VERSION,
                 );
-                output.appendLine('[canonical-save] Canonical path index rebuilt.');
+                logger.info('Canonical path index built successfully.');
                 invalidateCanonicalPathIndex();
                 await clearProjectImportState(projectCanonicalOverlayPath);
                 void importKnownProjectCanonicalPaths();
-            } catch {
-                output.appendLine('[canonical-save] Failed to build canonical path index.');
+            } catch (err) {
+                logger.error('Failed to build canonical path index:', err as Error);
             } finally {
                 canonicalIndexBuildPromise = undefined;
             }
@@ -1119,15 +1142,19 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     // Start Python bootstrap in background so activation doesn't block the extension host.
+    logger.info('Starting Python background environment setup...');
     void ensurePythonEnvironment(context).then(async (python) => {
         if (!python) {
+            logger.warn('Python environment is not ready after activation check.');
             await promptPythonSetup(context);
             return;
         }
+        logger.info('Python background setup completed. Commencing search and canonical index building.');
         void buildRomfsIndex();
         void buildCanonicalIndex();
         void importKnownProjectCanonicalPaths();
-    }).catch(async () => {
+    }).catch(async (err) => {
+        logger.error('Error in background Python setup:', err as Error);
         await promptPythonSetup(context);
     });
 

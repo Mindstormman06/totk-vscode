@@ -1,6 +1,7 @@
 import { execFile, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from './logger';
 
 const MAX_BUFFER = 1024 * 1024 * 50;
 export function runBridge(
@@ -10,13 +11,24 @@ export function runBridge(
     stdin?: string,
     env?: NodeJS.ProcessEnv,
 ): string {
-    return execFileSync(pythonExecutable, [bridgePath, ...args], {
-        encoding: 'utf-8',
-        maxBuffer: MAX_BUFFER,
-        input: stdin,
-        env: env ? { ...process.env, ...env } : process.env,
-        cwd: path.dirname(bridgePath),
-    });
+    const startTime = Date.now();
+    logger.debug(`bridge: Running sync command [${args[0]}] with args: ${args.slice(1).join(' ')}`);
+    try {
+        const result = execFileSync(pythonExecutable, [bridgePath, ...args], {
+            encoding: 'utf-8',
+            maxBuffer: MAX_BUFFER,
+            input: stdin,
+            env: env ? { ...process.env, ...env } : process.env,
+            cwd: path.dirname(bridgePath),
+        });
+        const elapsed = Date.now() - startTime;
+        logger.debug(`bridge: Sync command [${args[0]}] finished successfully in ${elapsed}ms (output size: ${result.length} chars)`);
+        return result;
+    } catch (error) {
+        const elapsed = Date.now() - startTime;
+        logger.error(`bridge: Sync command [${args[0]}] failed after ${elapsed}ms. Error:`, error as Error);
+        throw error;
+    }
 }
 
 export function runBridgeAsync(
@@ -26,6 +38,8 @@ export function runBridgeAsync(
     stdin?: string,
     env?: NodeJS.ProcessEnv,
 ): Promise<string> {
+    const startTime = Date.now();
+    logger.debug(`bridge: Running async command [${args[0]}] with args: ${args.slice(1).join(' ')}`);
     return new Promise((resolve, reject) => {
         const child = execFile(
             pythonExecutable,
@@ -37,10 +51,13 @@ export function runBridgeAsync(
                 cwd: path.dirname(bridgePath),
             },
             (error, stdout) => {
+                const elapsed = Date.now() - startTime;
                 if (error) {
+                    logger.error(`bridge: Async command [${args[0]}] failed after ${elapsed}ms. Error:`, error);
                     reject(error);
                     return;
                 }
+                logger.debug(`bridge: Async command [${args[0]}] finished successfully in ${elapsed}ms (output size: ${stdout.length} chars)`);
                 resolve(stdout);
             },
         );

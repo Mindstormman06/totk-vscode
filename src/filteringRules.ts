@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { logger } from './logger';
 import { resolveRomfsPath } from './romfs';
 import { isWithinRoot, resolveProjectRomfsMount } from './projectPaths';
 
@@ -208,7 +209,7 @@ async function updateTkvscConfigArray(
             config = JSON.parse(raw) as TkvscConfig;
         }
     } catch (e) {
-        console.error('Failed to parse existing .tkvsc:', e);
+        logger.error('Failed to parse existing .tkvsc:', e as Error);
     }
 
     if (!config.canonicalSyncBlacklistPrefixes) {

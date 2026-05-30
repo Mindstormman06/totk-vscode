@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
 import * as vscode from 'vscode';
+import { logger } from './logger';
 
 const VENV_DIR_NAME = 'python-env';
 const DEPS_MARKER = '.deps-installed';
@@ -268,16 +269,30 @@ export function getSystemPythonCandidates(): PythonLauncher[] {
 }
 
 export function findSystemPython(): PythonLauncher | undefined {
-    for (const launcher of getSystemPythonCandidates()) {
+    logger.debug('Scanning for system Python candidates...');
+    const candidates = getSystemPythonCandidates();
+    logger.debug(`Scanning ${candidates.length} Python candidates...`);
+    for (const launcher of candidates) {
+        logger.debug(`Checking candidate: ${launcher.executable} ${launcher.prefixArgs.join(' ')}`);
         if (!tryLauncher(launcher)) {
+            logger.debug(`Candidate ${launcher.executable} is not functional.`);
             continue;
         }
 
         const version = launcherVersion(launcher);
-        if (version && isVersionSupported(version)) {
-            return launcher;
+        if (version) {
+            logger.debug(`Candidate version parsed: ${version[0]}.${version[1]}`);
+            if (isVersionSupported(version)) {
+                logger.info(`Candidate selected: ${launcher.executable} (Version: ${version[0]}.${version[1]})`);
+                return launcher;
+            } else {
+                logger.debug(`Candidate version ${version[0]}.${version[1]} is older than minimum supported version 3.10.`);
+            }
+        } else {
+            logger.debug(`Could not parse version for candidate: ${launcher.executable}`);
         }
     }
+    logger.warn('No functional, supported Python installation was found.');
     return undefined;
 }
 
@@ -306,13 +321,16 @@ export async function configurePythonPath(
     context: vscode.ExtensionContext,
     executable: string,
 ): Promise<boolean> {
+    logger.info(`Configuring manual pythonPath: ${executable}`);
     const config = vscode.workspace.getConfiguration('totk-editor');
     await config.update('pythonPath', executable, vscode.ConfigurationTarget.Global);
     const python = await ensurePythonEnvironment(context, true);
     if (python) {
+        logger.info(`Manual pythonPath successfully configured and bootstrapped: ${executable}`);
         void vscode.window.showInformationMessage(`TOTK Editor: Using ${executable}`);
         return true;
     }
+    logger.error(`Manual pythonPath failed verification or bootstrapping: ${executable}`);
     return false;
 }
 
@@ -354,6 +372,7 @@ export async function pickDetectedPython(context: vscode.ExtensionContext): Prom
 }
 
 function verifyVenvPython(venvPython: string, vendorPymsbtPath: string): boolean {
+    logger.debug(`Running package verification check with venv executable: ${venvPython}`);
     try {
         const vendorPathLiteral = JSON.stringify(vendorPymsbtPath);
         execFileSync(
@@ -364,56 +383,79 @@ function verifyVenvPython(venvPython: string, vendorPymsbtPath: string): boolean
             ],
             { stdio: 'pipe', timeout: 60_000 },
         );
+        logger.debug('Package verification check succeeded.');
         return true;
-    } catch {
+    } catch (e) {
+        logger.warn(`Package verification check failed: ${e}`);
         return false;
     }
 }
 
 function createVenv(base: PythonLauncher, venvDir: string): void {
+    logger.info(`Running venv creation command using: ${base.executable} (args: ${base.prefixArgs.join(' ')})`);
     fs.mkdirSync(path.dirname(venvDir), { recursive: true });
     runQuiet(base, ['-m', 'venv', venvDir]);
+    logger.info('Venv creation command executed successfully.');
 }
 
 function installRequirements(venvPython: string, extensionPath: string): void {
+    logger.info('Upgrading pip in venv...');
     execFileSync(venvPython, ['-m', 'pip', 'install', '--upgrade', 'pip'], {
         stdio: 'pipe',
         timeout: 300_000,
     });
+    logger.info(`Installing packages from extension at path: ${extensionPath}`);
     execFileSync(venvPython, ['-m', 'pip', 'install', extensionPath], {
         stdio: 'pipe',
         timeout: 600_000,
     });
+    logger.info('Pip packages installation completed.');
 }
 
 async function bootstrapPython(context: vscode.ExtensionContext): Promise<string | undefined> {
     const pyprojectPath = path.join(context.extensionPath, 'pyproject.toml');
     if (!fs.existsSync(pyprojectPath)) {
+        logger.error(`pyproject.toml is missing from the extension package at: ${pyprojectPath}`);
         void vscode.window.showErrorMessage('TOTK Editor: pyproject.toml is missing from the extension package.');
         return undefined;
     }
+    logger.debug(`Found pyproject.toml at: ${pyprojectPath}`);
 
     const vendorPymsbtPath = path.join(context.extensionPath, 'vendor', 'pymsbt');
+    logger.debug(`Vendor pymsbt path: ${vendorPymsbtPath}`);
 
     const requirementsHash = readPyProjectHash(pyprojectPath);
+    logger.debug(`Requirements hash from pyproject.toml: ${requirementsHash}`);
+
     const storageDir = context.globalStorageUri.fsPath;
     const venvDir = path.join(storageDir, VENV_DIR_NAME);
     const venvPython = getVenvPython(venvDir);
     const markerPath = path.join(venvDir, DEPS_MARKER);
+    logger.info(`Venv path configured at: ${venvDir}`);
 
     if (
         fs.existsSync(venvPython) &&
         fs.existsSync(markerPath) &&
-        fs.readFileSync(markerPath, 'utf-8').trim() === requirementsHash &&
-        verifyVenvPython(venvPython, vendorPymsbtPath)
+        fs.readFileSync(markerPath, 'utf-8').trim() === requirementsHash
     ) {
-        return venvPython;
+        logger.info('Found existing virtual environment. Verifying packages compatibility...');
+        if (verifyVenvPython(venvPython, vendorPymsbtPath)) {
+            logger.info(`Virtual environment verified successfully! Using: ${venvPython}`);
+            return venvPython;
+        } else {
+            logger.warn('Virtual environment exists but package import checks failed. Proceeding to rebuild.');
+        }
+    } else {
+        logger.info('Virtual environment is either missing or pyproject.toml dependencies changed.');
     }
 
+    logger.info('Looking for system Python installations...');
     const basePython = findSystemPython();
     if (!basePython) {
+        logger.error('No supported system Python 3.10+ installation found. Cannot boot virtual environment.');
         return undefined;
     }
+    logger.info(`Supported base system Python found: ${basePython.executable} (args: ${basePython.prefixArgs.join(' ')})`);
 
     return vscode.window.withProgress(
         {
@@ -421,18 +463,27 @@ async function bootstrapPython(context: vscode.ExtensionContext): Promise<string
             title: 'TOTK Editor',
             cancellable: false,
         },
-        async () => {
+        async (progress) => {
             if (fs.existsSync(venvDir)) {
+                logger.info('Cleaning up existing virtual environment directory...');
                 fs.rmSync(venvDir, { recursive: true, force: true });
             }
 
+            logger.info('Creating new virtual environment...');
+            progress.report({ message: 'Creating Python virtual environment...' });
             createVenv(basePython, venvDir);
+
+            logger.info('Upgrading pip and installing extension package requirements...');
+            progress.report({ message: 'Installing Python package dependencies (oead, zstandard)...' });
             installRequirements(venvPython, context.extensionPath);
 
+            logger.info('Verifying package imports in newly created virtual environment...');
             if (!verifyVenvPython(venvPython, vendorPymsbtPath)) {
+                logger.error('Newly installed virtual environment failed package imports check.');
                 throw new Error('Python packages installed but import check failed (oead / zstandard / vendor/pymsbt).');
             }
 
+            logger.info('Virtual environment package imports check succeeded. Creating dependency marker file.');
             fs.writeFileSync(markerPath, requirementsHash, 'utf-8');
             return venvPython;
         },
@@ -447,23 +498,34 @@ export function ensurePythonEnvironment(
     context: vscode.ExtensionContext,
     force = false,
 ): Promise<string | undefined> {
+    logger.debug(`ensurePythonEnvironment called. force=${force}`);
     if (force) {
+        logger.info('Forcing python environment rebuild, clearing cached environments.');
         setupPromise = undefined;
         cachedPython = undefined;
     }
 
     if (!setupPromise) {
+        logger.info('Initializing Python setup bootstrap sequence...');
         setupPromise = bootstrapPython(context)
             .then((python) => {
+                if (python) {
+                    logger.info(`Python environment is successfully ready. Target path: ${python}`);
+                } else {
+                    logger.warn('Python setup returned undefined (no supported python executable available).');
+                }
                 cachedPython = python;
                 return python;
             })
             .catch((error: unknown) => {
                 cachedPython = undefined;
                 const message = error instanceof Error ? error.message : String(error);
+                logger.error('Python environment bootstrap failed:', error as Error);
                 void vscode.window.showErrorMessage(`TOTK Editor: Python setup failed - ${message}`);
                 return undefined;
             });
+    } else {
+        logger.debug('Reusing existing Python setup promise.');
     }
 
     return setupPromise;
