@@ -3,20 +3,38 @@ This file exists to explain TKCL Options to Mind so he can understand how the UX
 ## Mod Folder Structure Overview
 
 Mod Folder
-* `options\`
-  * `OptionGroupName1\`
-    * `Option1\`
-      * `romfs\`
-    * `Option2\`
-    * `Option3\`
-    * `OptionX\`
-    * `info.json`
-  * `OptionGroupName2\`
-  * `OptionGroupName3\`
-  * `OptionGroupNameX\`
-* `romfs\`
-* `.tkproj`
-
+```
+├── .tkproj
+├── thumbnail.jpg
+├── romfs/
+└── options/
+    ├── OptionGroup1Name/
+    │   ├── thumbnail.jpg
+    │   ├── Option1Name/
+    │   │   └── romfs/
+    │   ├── Option2Name/
+    │   │   └── romfs/
+    │   └── Option3Name/
+    │       └── romfs/
+    │
+    ├── OptionGroup2Name/
+    │   ├── thumbnail.jpg
+    │   ├── Option1Name/
+    │   │   └── romfs/
+    │   ├── Option2Name/
+    │   │   └── romfs/
+    │   └── Option3Name/
+    │       └── romfs/
+    │
+    └── OptionGroup3Name/
+        ├── thumbnail.jpg
+        ├── Option1Name/
+        │   └── romfs/
+        ├── Option2Name/
+        │   └── romfs/
+        └── Option3Name/
+            └── romfs/
+```
 
 Recommended Flow:
 1. Right click file in Game Dump
