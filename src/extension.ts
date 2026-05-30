@@ -53,6 +53,7 @@ import {
 import { getCoreExtensions, initCoreFsExtensions } from './coreFsExtensions';
 import { TkprojEditorProvider } from './tkprojEditor';
 import { TkvscEditorProvider } from './tkvscEditor';
+import { FontViewerProvider } from './fontViewer';
 import { setExtensionPath } from './romfsIndex';
 import {
     hasBaseCanonicalPath,
@@ -748,9 +749,37 @@ export async function activate(context: vscode.ExtensionContext) {
     registerDocumentLanguageModes(context);
     context.subscriptions.push(TkprojEditorProvider.register(context));
     context.subscriptions.push(TkvscEditorProvider.register(context));
-
+    
     const bridgePath = path.join(context.extensionPath, 'python', 'totk_bridge.py');
     const getPython = () => getCachedPythonExecutable() ?? '';
+
+    const getRawFontBytes = async (uri: vscode.Uri): Promise<Uint8Array> => {
+        if (uri.scheme === 'file') {
+            return await fs.promises.readFile(uri.fsPath);
+        }
+        
+        const fsPath = uri.fsPath;
+        const diskArchive = getDiskArchivePath(fsPath);
+        const locator = getLocatorInsideDiskArchive(fsPath, diskArchive);
+        
+        if (!locator || diskArchive === fsPath) {
+            return await fs.promises.readFile(fsPath);
+        }
+
+        const result = await runBridgeJsonAsync<{ path: string }>(
+            getPython(),
+            bridgePath,
+            ['export-temp', diskArchive, locator],
+            undefined,
+            getBridgeEnv()
+        );
+        const raw = await fs.promises.readFile(result.path);
+        try {
+            fs.unlinkSync(result.path);
+        } catch {}
+        return raw;
+    };
+    context.subscriptions.push(FontViewerProvider.register(context, getRawFontBytes));
     const romfsIndexPath = path.join(context.globalStorageUri.fsPath, 'romfs-index.sqlite');
     const canonicalIndexPath = path.join(context.globalStorageUri.fsPath, 'canonical-paths.sqlite');
     const projectCanonicalOverlayPath = path.join(
