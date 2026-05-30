@@ -26,6 +26,7 @@ Our core design philosophy creating this extension is **centralization of toolin
 <sup></sub>It also pairs well with **TKMM!**</sup></sub>
 
 **TKVSC** GameBanana page: https://gamebanana.com/tools/22893
+
 **Game Dump Guide** (required): https://gamebanana.com/tuts/19858
 
 ## DISCLAIMER
