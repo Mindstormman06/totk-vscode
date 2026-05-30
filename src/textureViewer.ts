@@ -152,14 +152,55 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
         color: var(--vscode-descriptionForeground, #999);
         user-select: none;
     }
-    .image-panel img {
-        image-rendering: pixelated;
+    .checker-bg {
         background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 16px 16px;
         border: 1px solid var(--vscode-panel-border, #444);
+        display: inline-flex;
+    }
+    .image-panel img {
+        image-rendering: pixelated;
     }
     .image-panel img#texImg.scaled {
         width: var(--scaled-w);
         height: var(--scaled-h);
+    }
+    .channel-previews {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+    }
+    .channel-preview {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+    }
+    .channel-preview span {
+        font-size: 11px;
+        color: var(--vscode-descriptionForeground, #999);
+        user-select: none;
+    }
+    .channel-preview .checker-bg {
+        background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 0 0 / 8px 8px;
+        border: 2px solid transparent;
+        border-radius: 4px;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    .channel-preview.active .checker-bg {
+        border-color: var(--vscode-focusBorder, #007acc);
+    }
+    .channel-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        image-rendering: pixelated;
     }
     .no-image {
         width: 256px;
@@ -242,6 +283,22 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
 </style>
 </head>
 <body>
+    <svg width="0" height="0" style="position:absolute;">
+      <defs>
+        <filter id="ch-r" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="1 0 0 0 0  1 0 0 0 0  1 0 0 0 0  0 0 0 1 0" />
+        </filter>
+        <filter id="ch-g" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 1 0 0 0  0 1 0 0 0  0 1 0 0 0  0 0 0 1 0" />
+        </filter>
+        <filter id="ch-b" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 1 0 0  0 0 1 0 0  0 0 1 0 0  0 0 0 1 0" />
+        </filter>
+        <filter id="ch-a" color-interpolation-filters="sRGB">
+          <feColorMatrix type="matrix" values="0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 1 0" />
+        </filter>
+      </defs>
+    </svg>
     <div class="image-panel">
         ${imgSrc ? `<div class="image-toolbar">
             <button class="size-toggle" id="sizeBtn" onclick="toggleSize()" title="Toggle size">
@@ -250,7 +307,29 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
             <span class="size-label" id="sizeLabel">${scaledW}\u00d7${scaledH}</span>
         </div>` : ''}
         ${imgSrc
-            ? `<img id="texImg" class="scaled" style="--scaled-w:${scaledW}px;--scaled-h:${scaledH}px" src="${imgSrc}" alt="${meta?.name ?? 'texture'}" />`
+            ? `<div class="checker-bg"><img id="texImg" class="scaled" style="--scaled-w:${scaledW}px;--scaled-h:${scaledH}px" src="${imgSrc}" alt="${meta?.name ?? 'texture'}" /></div>
+               <div class="channel-previews">
+                   <div class="channel-preview active" onclick="setChannel('all', this)">
+                       <div class="checker-bg"><img src="${imgSrc}" alt="All Channels" /></div>
+                       <span>RGB(A)</span>
+                   </div>
+                   <div class="channel-preview" onclick="setChannel('r', this)">
+                       <div class="checker-bg"><img src="${imgSrc}" style="filter: url(#ch-r)" alt="Red Channel" /></div>
+                       <span>R</span>
+                   </div>
+                   <div class="channel-preview" onclick="setChannel('g', this)">
+                       <div class="checker-bg"><img src="${imgSrc}" style="filter: url(#ch-g)" alt="Green Channel" /></div>
+                       <span>G</span>
+                   </div>
+                   <div class="channel-preview" onclick="setChannel('b', this)">
+                       <div class="checker-bg"><img src="${imgSrc}" style="filter: url(#ch-b)" alt="Blue Channel" /></div>
+                       <span>B</span>
+                   </div>
+                   <div class="channel-preview" onclick="setChannel('a', this)">
+                       <div class="checker-bg"><img src="${imgSrc}" style="filter: url(#ch-a)" alt="Alpha Channel" /></div>
+                       <span>A</span>
+                   </div>
+               </div>`
             : '<div class="no-image">No preview</div>'}
     </div>
     <div class="props-panel">
@@ -263,6 +342,19 @@ function buildHtml(result: BntxTextureResult, webview: vscode.Webview): string {
     <script>
         const vscode = acquireVsCodeApi();
         let scaled = true;
+        function setChannel(ch, el) {
+            const img = document.getElementById('texImg');
+            if (!img) return;
+            
+            if (ch === 'all') {
+                img.style.filter = 'none';
+            } else {
+                img.style.filter = 'url(#ch-' + ch + ')';
+            }
+
+            document.querySelectorAll('.channel-preview').forEach(p => p.classList.remove('active'));
+            if (el) el.classList.add('active');
+        }
         function toggleSize() {
             const img = document.getElementById('texImg');
             const label = document.getElementById('sizeLabel');
