@@ -16,6 +16,7 @@ export interface DiskWriteNotification {
 export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
     private readonly _onDidChangeFile = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
     readonly onDidChangeFile = this._onDidChangeFile.event;
+    private readonly fileContentCache = new Map<string, string | Uint8Array>();
 
     constructor(
         private readonly bridgePath: string,
@@ -77,7 +78,9 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
 
         if (!isEditableFile(diskPath)) {
             logger.debug(`totk-disk: Non-editable raw binary file. Reading directly from disk.`);
-            return fs.readFileSync(diskPath);
+            const raw = fs.readFileSync(diskPath);
+            this.fileContentCache.set(uri.toString(), raw);
+            return raw;
         }
 
         logger.debug(`totk-disk: Editable file detected. Invoking Python bridge read-disk for processing...`);
@@ -90,6 +93,7 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
                 this.getBridgeEnv(),
             );
             logger.debug(`totk-disk: Successfully read and processed file: ${diskPath}`);
+            this.fileContentCache.set(uri.toString(), content);
             return new TextEncoder().encode(content);
         } catch (error) {
             logger.error(`totk-disk: Failed to read editable file: ${diskPath}`, error as Error);
@@ -105,9 +109,15 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
 
         if (!isEditableFile(diskPath)) {
             logger.debug(`totk-disk: Non-editable raw binary file. Writing directly to disk.`);
+            const cached = this.fileContentCache.get(uri.toString());
+            if (cached instanceof Uint8Array && cached.length === content.length && Buffer.compare(cached, content) === 0) {
+                logger.info(`totk-disk: Skipping write and canonical sync for unchanged binary file: ${diskPath}`);
+                return;
+            }
             fs.writeFileSync(diskPath, content);
             logger.showSavedToast(diskPath);
             await this.onDidWriteFile?.({ diskPath, content });
+            this.fileContentCache.set(uri.toString(), content);
             return;
         }
 
@@ -116,6 +126,13 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
             fs.writeFileSync(diskPath, content);
             logger.showSavedToast(diskPath);
             await this.onDidWriteFile?.({ diskPath, content, textContent: text });
+            this.fileContentCache.set(uri.toString(), text);
+            return;
+        }
+
+        const cached = this.fileContentCache.get(uri.toString());
+        if (typeof cached === 'string' && cached === text) {
+            logger.info(`totk-disk: Skipping write and canonical sync for unchanged file: ${diskPath}`);
             return;
         }
 
@@ -132,6 +149,7 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
             logger.info(`totk-disk: Successfully wrote and processed file: ${diskPath}`);
             logger.showSavedToast(diskPath);
             await this.onDidWriteFile?.({ diskPath, content, textContent: text });
+            this.fileContentCache.set(uri.toString(), text);
         } catch (error) {
             logger.error(`totk-disk: Failed to write editable file: ${diskPath}`, error as Error);
             const message = error instanceof Error ? error.message : String(error);
@@ -148,12 +166,18 @@ export class TotkDiskFileSystemProvider implements vscode.FileSystemProvider {
 
     delete(uri: vscode.Uri, options: { recursive: boolean }): void {
         logger.info(`totk-disk: Deleting path (recursive=${options.recursive}): ${uri.fsPath}`);
+        this.fileContentCache.delete(uri.toString());
         deleteDiskPath(uri.fsPath, options.recursive);
         this._onDidChangeFile.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
     }
 
     rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean }): void {
         logger.info(`totk-disk: Renaming path (overwrite=${options.overwrite}) from: ${oldUri.fsPath} to: ${newUri.fsPath}`);
+        const cached = this.fileContentCache.get(oldUri.toString());
+        if (cached !== undefined) {
+            this.fileContentCache.delete(oldUri.toString());
+            this.fileContentCache.set(newUri.toString(), cached);
+        }
         renameDiskPath(oldUri.fsPath, newUri.fsPath, options.overwrite);
         this._onDidChangeFile.fire([
             { type: vscode.FileChangeType.Deleted, uri: oldUri },

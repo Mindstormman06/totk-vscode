@@ -142,6 +142,7 @@ class SarcProvider implements vscode.FileSystemProvider {
 
     private fileCache = new Map<string, string[]>();
     private virtualDirectories = new Map<string, string>();
+    private fileContentCache = new Map<string, string | Uint8Array>();
 
     constructor(
         private readonly bridgePath: string,
@@ -384,6 +385,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                         ['read-disk', fsPath],
                         getBridgeEnv(),
                     );
+                    this.fileContentCache.set(uri.toString(), content);
                     return new TextEncoder().encode(content);
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
@@ -391,6 +393,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                 }
             }
             const raw = fs.readFileSync(fsPath);
+            this.fileContentCache.set(uri.toString(), raw);
             // For non-editable binary files opened from archive-related trees, show external-tool actions.
             if ((uri.scheme === 'totk-dump' || uri.scheme === 'sarc') && isLikelyBinaryBuffer(raw)) {
                 return new TextEncoder().encode(
@@ -423,6 +426,12 @@ class SarcProvider implements vscode.FileSystemProvider {
                     ? content
                     : 'TOTK Editor does not have a built-in parser for this file type yet.';
                 return new TextEncoder().encode(formatExternalToolPrompt(filePath, reason));
+            }
+
+            if (isEditableFile(fsPath)) {
+                this.fileContentCache.set(uri.toString(), content);
+            } else {
+                this.fileContentCache.set(uri.toString(), new TextEncoder().encode(content));
             }
 
             return new TextEncoder().encode(content);
@@ -466,11 +475,19 @@ class SarcProvider implements vscode.FileSystemProvider {
                 if (!fs.existsSync(fsPath)) {
                     fs.writeFileSync(fsPath, content);
                     logger.showSavedToast(fsPath);
+                    this.fileContentCache.set(uri.toString(), new TextDecoder().decode(content));
                     return;
                 }
                 try {
                     logger.showProcessingToast(fsPath);
                     const text = new TextDecoder().decode(content);
+
+                    const cached = this.fileContentCache.get(uri.toString());
+                    if (cached !== undefined && cached === text) {
+                        logger.info(`Skipping write and canonical sync for unchanged file: ${fsPath}`);
+                        return;
+                    }
+
                     await runBridgeJsonAsync<{ success: boolean }>(
                         this.requirePython(),
                         this.bridgePath,
@@ -479,6 +496,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                         getBridgeEnv(),
                     );
                     logger.showSavedToast(fsPath);
+                    this.fileContentCache.set(uri.toString(), text);
                 } catch (error) {
                     const message = error instanceof Error ? error.message : String(error);
                     vscode.window.showErrorMessage(`Failed to save: ${message}`);
@@ -486,7 +504,14 @@ class SarcProvider implements vscode.FileSystemProvider {
                 }
                 return;
             }
+
+            const cached = this.fileContentCache.get(uri.toString());
+            if (cached instanceof Uint8Array && cached.length === content.length && Buffer.compare(cached, content) === 0) {
+                logger.info(`Skipping write for unchanged binary file: ${fsPath}`);
+                return;
+            }
             fs.writeFileSync(fsPath, content);
+            this.fileContentCache.set(uri.toString(), content);
             return;
         }
 
@@ -498,6 +523,13 @@ class SarcProvider implements vscode.FileSystemProvider {
             if (isEditableFile(fsPath) && content.length > 0 && !isLikelyBinaryBuffer(content)) {
                 logger.showProcessingToast(fsPath);
                 const yamlContent = new TextDecoder().decode(content);
+
+                const cached = this.fileContentCache.get(uri.toString());
+                if (cached !== undefined && cached === yamlContent) {
+                    logger.info(`Skipping write and canonical sync for unchanged file inside archive: ${fsPath}`);
+                    return;
+                }
+
                 await runBridgeJsonAsync<{ success: boolean }>(
                     this.requirePython(),
                     this.bridgePath,
@@ -512,7 +544,14 @@ class SarcProvider implements vscode.FileSystemProvider {
                     textContent: yamlContent,
                 });
                 logger.showSavedToast(fsPath);
+                this.fileContentCache.set(uri.toString(), yamlContent);
             } else {
+                const cached = this.fileContentCache.get(uri.toString());
+                if (cached instanceof Uint8Array && cached.length === content.length && Buffer.compare(cached, content) === 0) {
+                    logger.info(`Skipping write and canonical sync for unchanged binary file inside archive: ${fsPath}`);
+                    return;
+                }
+
                 const encoded = Buffer.from(content).toString('base64');
                 await runBridgeJsonAsync<{ success: boolean }>(
                     this.requirePython(),
@@ -526,6 +565,7 @@ class SarcProvider implements vscode.FileSystemProvider {
                     internalPath: filePath,
                     content,
                 });
+                this.fileContentCache.set(uri.toString(), content);
             }
 
             for (const key of [...this.fileCache.keys()]) {
@@ -543,6 +583,7 @@ class SarcProvider implements vscode.FileSystemProvider {
 
     async delete(uri: vscode.Uri, options: { recursive: boolean }): Promise<void> {
         const fsPath = uri.fsPath;
+        this.fileContentCache.delete(uri.toString());
         if (this.isMutatableDiskPath(fsPath)) {
             deleteDiskPath(fsPath, options.recursive);
             this.notifyChanged(uri, vscode.FileChangeType.Deleted);
@@ -592,6 +633,11 @@ class SarcProvider implements vscode.FileSystemProvider {
     async rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean }): Promise<void> {
         const oldPath = oldUri.fsPath;
         const newPath = newUri.fsPath;
+        const cached = this.fileContentCache.get(oldUri.toString());
+        if (cached !== undefined) {
+            this.fileContentCache.delete(oldUri.toString());
+            this.fileContentCache.set(newUri.toString(), cached);
+        }
         if (this.isMutatableDiskPath(oldPath) && this.isMutatableDiskPath(newPath)) {
             renameDiskPath(oldPath, newPath, options.overwrite);
             this.notifyChanged(oldUri, vscode.FileChangeType.Deleted);
