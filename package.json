@@ -250,6 +250,14 @@
         "title": "TOTK: Set Game Dump Path"
       },
       {
+        "command": "totk-editor.setActiveProject",
+        "title": "Set as Active Project"
+      },
+      {
+        "command": "totk-editor.addDumpToActiveProject",
+        "title": "Add to Active Project"
+      },
+      {
         "command": "totk-editor.addDumpToProject",
         "title": "Add to Project…"
       },
@@ -426,6 +434,11 @@
           "when": "view == totk-editor.archives && viewItem == archiveRoot"
         },
         {
+          "command": "totk-editor.setActiveProject",
+          "when": "view == totk-editor.archives && viewItem == archiveRoot",
+          "group": "1_active"
+        },
+        {
           "command": "totk-editor.archiveNewFile",
           "when": "view == totk-editor.archives && (viewItem == archiveRoot || viewItem == archiveDir || viewItem == archiveVirtualDir || viewItem == archivePackage)",
           "group": "1_create@1"
@@ -476,9 +489,14 @@
           "group": "5_export@1"
         },
         {
+          "command": "totk-editor.addDumpToActiveProject",
+          "when": "view == totk-editor.gameDump && (viewItem == dumpFile || viewItem == dumpVirtualFile || viewItem == dumpArchive)",
+          "group": "2_add@1"
+        },
+        {
           "command": "totk-editor.addDumpToProject",
           "when": "view == totk-editor.gameDump && (viewItem == dumpFile || viewItem == dumpVirtualFile || viewItem == dumpArchive)",
-          "group": "2_add"
+          "group": "2_add@2"
         },
         {
           "command": "totk-editor.configureFilteringRules",
