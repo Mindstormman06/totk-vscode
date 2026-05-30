@@ -1,6 +1,6 @@
 [project]
 name = "totk-vscode-python"
-version = "0.0.1b2"
+version = "0.0.2b1"
 description = "Python scripts for TOTK VSCode extension"
 requires-python = "~=3.12"
 dependencies = [
