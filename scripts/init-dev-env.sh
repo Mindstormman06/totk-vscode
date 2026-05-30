@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# Set up the dev environment from a fresh clone of totk-vscode.
+#
+#   1. Initializes git submodules
+#   2. Installs Node dependencies (root)
+#   3. Creates a Python venv and installs Python dependencies
+#
+# Usage:
+#   ./scripts/init-env.sh
+#   ./scripts/init-env.sh --python /path/to/python3.12  # explicit python
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PYTHON_CMD=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --python)    PYTHON_CMD="$2"; shift 2 ;;
+        *)           echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+cd "$ROOT"
+
+# ── 1. Git submodules ──────────────────────────────────────────────
+echo ""
+echo "=== Initializing git submodules ==="
+git submodule update --init --recursive
+
+# ── 2. Node dependencies ───────────────────────────────────────────
+echo ""
+echo "=== Installing Node dependencies (root) ==="
+npm install
+
+# ── 3. Python venv ─────────────────────────────────────────────────
+echo ""
+echo "=== Setting up Python virtual environment ==="
+
+if [[ -z "$PYTHON_CMD" ]]; then
+    for candidate in python3 python; do
+        if command -v "$candidate" &>/dev/null; then
+            ver=$("$candidate" --version 2>&1 || true)
+            if [[ "$ver" =~ Python\ 3\.([0-9]+) ]] && (( ${BASH_REMATCH[1]} >= 10 )); then
+                PYTHON_CMD="$candidate"
+                echo "  Found: $ver ($candidate)"
+                break
+            fi
+        fi
+    done
+    if [[ -z "$PYTHON_CMD" ]]; then
+        echo "ERROR: Python 3.10+ not found. Install it or pass --python /path/to/python3."
+        exit 1
+    fi
+fi
+
+VENV_DIR="$ROOT/.venv"
+if [[ ! -d "$VENV_DIR" ]]; then
+    echo "  Creating venv at $VENV_DIR"
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+else
+    echo "  venv already exists at $VENV_DIR"
+fi
+
+PIP="$VENV_DIR/bin/pip"
+echo "  Installing Python dependencies"
+"$PIP" install "$ROOT" --quiet
+
+echo ""
+echo "=== Dev Environment Setup complete ==="
