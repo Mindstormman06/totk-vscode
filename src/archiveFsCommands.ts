@@ -4,6 +4,7 @@ import { toSarcUri, type ArchiveTreeItem } from './archiveTree';
 import { isAampExtension } from './aampExtensions';
 import { isPathInsideArchive, isArchiveFile, getDiskArchivePath, isArchiveFileName } from './archives';
 import { getDumpSelection, type DumpTreeItem } from './dumpTree';
+import { resolveRomfsPath } from './romfs';
 
 let archiveTreeView: vscode.TreeView<ArchiveTreeItem> | undefined;
 
@@ -124,12 +125,16 @@ async function initialContentForNewFile(name: string): Promise<Uint8Array | unde
         return new Uint8Array();
     }
 
+    const romfsPath = resolveRomfsPath();
+    const defaultUri = romfsPath ? vscode.Uri.file(romfsPath) : undefined;
+
     const picked = await vscode.window.showOpenDialog({
         canSelectMany: false,
         canSelectFiles: true,
         canSelectFolders: false,
         title: `Pick ${promptConfig.kindLabel} template file`,
         filters: promptConfig.filters,
+        defaultUri,
     });
     if (!picked?.[0]) {
         return undefined;
