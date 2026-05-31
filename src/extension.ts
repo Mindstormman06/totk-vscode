@@ -54,6 +54,7 @@ import { getCoreExtensions, initCoreFsExtensions } from './coreFsExtensions';
 import { TkprojEditorProvider } from './tkprojEditor';
 import { TkvscEditorProvider } from './tkvscEditor';
 import { FontViewerProvider } from './fontViewer';
+import { InfoJsonEditorProvider } from './infoJsonEditor';
 import { setExtensionPath } from './romfsIndex';
 import {
     hasBaseCanonicalPath,
@@ -780,6 +781,13 @@ export async function activate(context: vscode.ExtensionContext) {
         return raw;
     };
     context.subscriptions.push(FontViewerProvider.register(context, getRawFontBytes));
+    context.subscriptions.push(InfoJsonEditorProvider.register(context));
+
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider('totk-font', {
+            provideTextDocumentContent: () => 'Font preview not supported as text.',
+        })
+    );
     const romfsIndexPath = path.join(context.globalStorageUri.fsPath, 'romfs-index.sqlite');
     const canonicalIndexPath = path.join(context.globalStorageUri.fsPath, 'canonical-paths.sqlite');
     const projectCanonicalOverlayPath = path.join(
@@ -1134,6 +1142,7 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     const sarcProvider = new SarcProvider(bridgePath, getPython, runCanonicalPropagation);
+
     context.subscriptions.push(
         vscode.workspace.registerFileSystemProvider('sarc', sarcProvider, {
             isCaseSensitive: true,

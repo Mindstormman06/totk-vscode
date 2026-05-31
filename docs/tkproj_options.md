@@ -39,7 +39,3 @@ Mod Folder
     |   └── info.json
 ```
 
-Recommended Flow:
-1. Right click file in Game Dump
-
-I WILL MAKE A PHOTOSHOP CONCEPT FOR THE UI WHICH WILL EXPLAIN IT BETTER THAN MY WORDS CAN

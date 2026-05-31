@@ -45,6 +45,7 @@ export async function addDumpEntryToProject(
     projectRoot: string,
     romfsRoot?: string,
     options?: { suppressSuccessMessage?: boolean },
+    tkmmOption?: { group: string; option: string },
 ): Promise<boolean> {
     const dumpRoot = romfsRoot?.trim()
         ? normalizePath(romfsRoot)
@@ -58,7 +59,7 @@ export async function addDumpEntryToProject(
 
     let copyPaths: { source: string; destination: string };
     try {
-        copyPaths = resolveAddToCopyPaths(sourceFsPath, projectRoot, dumpRoot);
+        copyPaths = resolveAddToCopyPaths(sourceFsPath, projectRoot, dumpRoot, tkmmOption);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         void vscode.window.showErrorMessage(`Add to project: ${message}`);

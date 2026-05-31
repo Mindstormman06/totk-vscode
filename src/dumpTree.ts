@@ -6,6 +6,7 @@ import { isArchiveFile, isBntxTextureUri, isPathInsideArchive, isTxtgFile } from
 import type { ArchiveTreeProvider } from './archiveTree';
 import { resolveRomfsPath } from './romfs';
 import { invalidateRomfsIndex, queryRomfsIndex } from './romfsIndex';
+import { getActiveTkmmOption, askForTkmmOption } from './tkmmOptions';
 
 export const DUMP_SCHEME = 'totk-dump';
 const GAME_DUMP_SEARCH_VIEW_ID = 'totk-editor.gameDumpSearch';
@@ -617,6 +618,8 @@ export function registerGameDumpTree(
                     return;
                 }
 
+                const activeTkmmOption = getActiveTkmmOption(context, projectRoot);
+
                 let copiedCount = 0;
                 for (const entry of entries) {
                     const copied = await addDumpEntryToProject(
@@ -624,6 +627,7 @@ export function registerGameDumpTree(
                         projectRoot,
                         undefined,
                         { suppressSuccessMessage: entries.length > 1 },
+                        activeTkmmOption
                     );
                     if (copied) {
                         copiedCount++;
@@ -666,6 +670,13 @@ export function registerGameDumpTree(
                     return;
                 }
 
+                const optionResult = await askForTkmmOption(projectRoot);
+                if (!optionResult || optionResult === 'BACK') {
+                    return;
+                }
+
+                const tkmmOption = optionResult === 'BASE_PROJECT' ? undefined : optionResult;
+
                 let copiedCount = 0;
                 for (const entry of entries) {
                     const copied = await addDumpEntryToProject(
@@ -673,6 +684,7 @@ export function registerGameDumpTree(
                         projectRoot,
                         undefined,
                         { suppressSuccessMessage: entries.length > 1 },
+                        tkmmOption
                     );
                     if (copied) {
                         copiedCount++;

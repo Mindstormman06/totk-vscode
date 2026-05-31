@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { isArchiveFile, isBntxTextureUri, isPathInsideArchive, isTxtgFile } from './archives';
 import { registerArchiveFileCommands, ArchiveTreeDragDrop, setArchiveTreeView } from './archiveFsCommands';
+import { getActiveTkmmOption, createTkmmOptionGroup, createTkmmOption, setActiveTkmmOption } from './tkmmOptions';
 
 const STORAGE_KEY = 'totk-editor.archiveRoots';
 
@@ -42,7 +43,10 @@ export class ArchiveTreeItem extends vscode.TreeItem {
                 ? { command: 'totk-editor.openBntxTexture', title: 'View Texture', arguments: [resourceUri] }
                 : { command: 'vscode.open', title: 'Open', arguments: [resourceUri] };
         }
-        if (isArchiveFile(entryName)) {
+        
+        if (!options?.isRoot && options?.isActive) {
+            this.iconPath = new vscode.ThemeIcon('star-full');
+        } else if (isArchiveFile(entryName)) {
             this.iconPath = new vscode.ThemeIcon('package');
         } else if ((isBntxTextureUri(resourceUri) || isTxtgFile(resourceUri.fsPath)) && extensionUri) {
             this.iconPath = vscode.Uri.joinPath(extensionUri, 'icons', 'texture.svg');
@@ -97,18 +101,48 @@ export class ArchiveTreeProvider implements vscode.TreeDataProvider<ArchiveTreeI
 
         try {
             const entries = await vscode.workspace.fs.readDirectory(element.resourceUri);
+            const isProjectRoot = element.contextValue === 'archiveRoot';
+            
+            // Find the project root path for this element
+            let projectRootPath = element.resourceUri.fsPath;
+            if (!isProjectRoot) {
+                const matchedRoot = this.roots.find(r => element.resourceUri.fsPath.startsWith(r.fsPath));
+                if (matchedRoot) {
+                    projectRootPath = matchedRoot.fsPath;
+                }
+            }
+            
+            const activeTkmmOption = getActiveTkmmOption(this.context, projectRootPath);
+
             return entries
                 .sort(compareEntriesFoldersFirstKeepingArchivesMixed)
                 .map(([name, fileType]) => {
                     const childUri = vscode.Uri.joinPath(element.resourceUri, name);
                     const isDirectory = fileType === vscode.FileType.Directory || isArchiveFile(name);
+                    
+                    let contextValue = archiveContextValue(name, isDirectory, childUri.fsPath);
+                    if (isProjectRoot && name.toLowerCase() === 'options' && isDirectory) {
+                        contextValue = 'tkmmOptionsRoot';
+                    } else if (element.contextValue === 'tkmmOptionsRoot' && isDirectory) {
+                        contextValue = 'tkmmOptionGroup';
+                    } else if (element.contextValue === 'tkmmOptionGroup' && isDirectory) {
+                        contextValue = 'tkmmOption';
+                    }
+
+                    let isActiveOption = false;
+                    if (contextValue === 'tkmmOption' && activeTkmmOption) {
+                        if (element.entryName === activeTkmmOption.group && name === activeTkmmOption.option) {
+                            isActiveOption = true;
+                        }
+                    }
+
                     return new ArchiveTreeItem(
                         name,
                         childUri,
                         isDirectory
                             ? vscode.TreeItemCollapsibleState.Collapsed
                             : vscode.TreeItemCollapsibleState.None,
-                        { contextValue: archiveContextValue(name, isDirectory, childUri.fsPath) },
+                        { contextValue, isActive: isActiveOption },
                     );
                 });
         } catch (error) {
@@ -309,6 +343,63 @@ export function registerArchiveTree(context: vscode.ExtensionContext): ArchiveTr
             (item: ArchiveTreeItem | undefined) => {
                 if (item && item.resourceUri) {
                     provider.setActiveProject(item.resourceUri.fsPath);
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'totk-editor.createOptionGroup',
+            async (item: ArchiveTreeItem | undefined) => {
+                let rootUri: string | undefined;
+                if (item?.contextValue === 'archiveRoot') {
+                    rootUri = item.resourceUri.fsPath;
+                } else if (item?.contextValue === 'tkmmOptionsRoot') {
+                    rootUri = path.dirname(item.resourceUri.fsPath);
+                }
+                if (!rootUri) return;
+                
+                const groupName = await vscode.window.showInputBox({ prompt: 'Enter Option Group Name' });
+                if (groupName) {
+                    await createTkmmOptionGroup(rootUri, groupName);
+                    provider.refresh();
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'totk-editor.createOption',
+            async (item: ArchiveTreeItem | undefined) => {
+                if (item?.contextValue === 'tkmmOptionGroup') {
+                    const groupName = item.entryName;
+                    const rootUri = path.dirname(path.dirname(item.resourceUri.fsPath));
+                    
+                    const optionName = await vscode.window.showInputBox({ prompt: `Enter Option Name for group '${groupName}'` });
+                    if (optionName) {
+                        await createTkmmOption(rootUri, groupName, optionName);
+                        provider.refresh();
+                    }
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'totk-editor.setActiveOption',
+            async (item: ArchiveTreeItem | undefined) => {
+                if (item?.contextValue === 'tkmmOption') {
+                    const optionName = item.entryName;
+                    const groupName = path.basename(path.dirname(item.resourceUri.fsPath));
+                    const rootUri = path.dirname(path.dirname(path.dirname(item.resourceUri.fsPath)));
+                    
+                    await setActiveTkmmOption(context, rootUri, groupName, optionName);
+                    provider.refresh();
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'totk-editor.clearActiveOption',
+            async (item: ArchiveTreeItem | undefined) => {
+                if (item?.contextValue === 'archiveRoot') {
+                    const rootUri = item.resourceUri.fsPath;
+                    
+                    await setActiveTkmmOption(context, rootUri, undefined, undefined);
+                    provider.refresh();
                 }
             }
         ),

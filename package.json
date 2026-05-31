@@ -42,6 +42,16 @@
         "priority": "default"
       },
       {
+        "viewType": "totk-editor.infoJsonEditor",
+        "displayName": "TKMM Option Editor",
+        "selector": [
+          {
+            "filenamePattern": "**/options/**/info.json"
+          }
+        ],
+        "priority": "default"
+      },
+      {
         "viewType": "totk-editor.tkvscEditor",
         "displayName": "TKVSC Config Editor",
         "selector": [
@@ -289,6 +299,14 @@
         "title": "Add to Project…"
       },
       {
+        "command": "totk-editor.archiveAddToActiveOption",
+        "title": "Add to Active Option"
+      },
+      {
+        "command": "totk-editor.archiveAddToOption",
+        "title": "Add to Option…"
+      },
+      {
         "command": "totk-editor.configureFilteringRules",
         "title": "Blacklist (Filter Rule)…"
       },
@@ -391,6 +409,22 @@
       {
         "command": "totk-editor.archiveReplaceFolder",
         "title": "Replace Folder..."
+      },
+      {
+        "command": "totk-editor.createOptionGroup",
+        "title": "TKMM: Create Option Group"
+      },
+      {
+        "command": "totk-editor.createOption",
+        "title": "TKMM: Create Option"
+      },
+      {
+        "command": "totk-editor.setActiveOption",
+        "title": "TKMM: Set as Active Option"
+      },
+      {
+        "command": "totk-editor.clearActiveOption",
+        "title": "TKMM: Use Base Project as Active"
       }
     ],
     "viewsContainers": {
@@ -502,13 +536,33 @@
           "group": "1_create@4"
         },
         {
+          "command": "totk-editor.createOptionGroup",
+          "when": "view == totk-editor.archives && (viewItem == archiveRoot || viewItem == tkmmOptionsRoot)",
+          "group": "1_create@5"
+        },
+        {
+          "command": "totk-editor.createOption",
+          "when": "view == totk-editor.archives && viewItem == tkmmOptionGroup",
+          "group": "1_create@6"
+        },
+        {
+          "command": "totk-editor.setActiveOption",
+          "when": "view == totk-editor.archives && viewItem == tkmmOption",
+          "group": "1_active@2"
+        },
+        {
+          "command": "totk-editor.clearActiveOption",
+          "when": "view == totk-editor.archives && viewItem == archiveRoot",
+          "group": "1_active@3"
+        },
+        {
           "command": "totk-editor.archiveRename",
-          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
+          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir || viewItem == tkmmOptionsRoot || viewItem == tkmmOptionGroup || viewItem == tkmmOption)",
           "group": "7_modification@1"
         },
         {
           "command": "totk-editor.archiveDelete",
-          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
+          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir || viewItem == tkmmOptionsRoot || viewItem == tkmmOptionGroup || viewItem == tkmmOption)",
           "group": "7_modification@2"
         },
         {
@@ -550,6 +604,16 @@
           "command": "totk-editor.dumpExport",
           "when": "view == totk-editor.gameDump && viewItem == dumpVirtualFile",
           "group": "5_export@1"
+        },
+        {
+          "command": "totk-editor.archiveAddToActiveOption",
+          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
+          "group": "2_add@1"
+        },
+        {
+          "command": "totk-editor.archiveAddToOption",
+          "when": "view == totk-editor.archives && (viewItem == archiveFile || viewItem == archiveVirtualFile || viewItem == archivePackage || viewItem == archiveDir || viewItem == archiveVirtualDir)",
+          "group": "2_add@2"
         },
         {
           "command": "totk-editor.addDumpToActiveProject",
