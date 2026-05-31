@@ -347,9 +347,15 @@ export class ArchiveTreeProvider implements vscode.TreeDataProvider<ArchiveTreeI
     }
     
     public async setLogicalProjectRoot(workspacePath: string, logicalPath: string): Promise<void> {
+        const oldLogicalRoot = this.logicalRoots.get(workspacePath) || workspacePath;
         this.logicalRoots.set(workspacePath, logicalPath);
         await this.persistLogicalRoots();
-        this.refresh();
+        
+        if (this.activeProjectRootUri === oldLogicalRoot) {
+            this.setActiveProject(workspacePath); // setActiveProject handles saving and refreshing
+        } else {
+            this.refresh();
+        }
     }
 }
 
