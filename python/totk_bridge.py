@@ -522,6 +522,26 @@ def main():
                 raise ValueError(f"Cannot write file type: {file_path}")
             print(json.dumps({"success": True}))
 
+        elif command == "decompress-file":
+            input_path = sys.argv[2]
+            logical_path = sys.argv[3] if len(sys.argv) > 3 else input_path
+            file_data = Path(input_path).read_bytes()
+            decompressed, _, _ = decompress_container(file_data, logical_path, romfs_path)
+            fd, tmp_path = tempfile.mkstemp(prefix="totk-decomp-", suffix="-" + Path(logical_path).name.replace(".zs", ""))
+            with os.fdopen(fd, "wb") as out:
+                out.write(decompressed)
+            print(json.dumps({"path": tmp_path}))
+
+        elif command == "compress-file":
+            input_path = sys.argv[2]
+            logical_path = sys.argv[3] if len(sys.argv) > 3 else input_path
+            file_data = Path(input_path).read_bytes()
+            compressed = compress_container(file_data, logical_path, romfs_path, was_zstd=True, was_yaz0=False)
+            fd, tmp_path = tempfile.mkstemp(prefix="totk-comp-", suffix="-" + Path(logical_path).name)
+            with os.fdopen(fd, "wb") as out:
+                out.write(compressed)
+            print(json.dumps({"path": tmp_path}))
+
         else:
             archive_path = sys.argv[2]
 

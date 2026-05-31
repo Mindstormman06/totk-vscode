@@ -53,6 +53,7 @@ import {
 import { getCoreExtensions, initCoreFsExtensions } from './coreFsExtensions';
 import { TkprojEditorProvider } from './tkprojEditor';
 import { TkvscEditorProvider } from './tkvscEditor';
+import { openHexEditor } from './editors/hexEditor';
 import { setExtensionPath } from './romfsIndex';
 import {
     hasBaseCanonicalPath,
@@ -1438,6 +1439,38 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     context.subscriptions.push(openEditableFile);
+
+    const openHexEditorCommand = vscode.commands.registerCommand('totk-editor.openHexEditor', async (uri?: vscode.Uri) => {
+        const targetUri = uri ?? vscode.window.activeTextEditor?.document.uri;
+        if (!targetUri) {
+            return;
+        }
+
+        let isReadOnly = true;
+        const scheme = targetUri.scheme;
+        if (scheme !== 'totk-dump') {
+            const fsPath = targetUri.fsPath;
+            const config = vscode.workspace.getConfiguration('totk-editor');
+            const romfsPath = config.get<string>('romfsPath', '');
+            const normalizedRomfs = romfsPath ? path.normalize(romfsPath).toLowerCase() : '';
+            const normalizedFsPath = path.normalize(fsPath).toLowerCase();
+
+            const isInsideDump = normalizedRomfs && normalizedFsPath.startsWith(normalizedRomfs);
+
+            const projectRoots = archiveTree ? archiveTree.getProjectRoots() : [];
+            const isInsideProject = projectRoots.some(root => {
+                const normalizedRoot = path.normalize(root.fsPath).toLowerCase();
+                return normalizedFsPath.startsWith(normalizedRoot);
+            });
+
+            if (isInsideProject && !isInsideDump) {
+                isReadOnly = false;
+            }
+        }
+
+        openHexEditor(targetUri, context.extensionUri, isReadOnly);
+    });
+    context.subscriptions.push(openHexEditorCommand);
 
     const openArchive = vscode.commands.registerCommand('totk-editor.openPack', async () => {
         const fileUri = await vscode.window.showOpenDialog({
