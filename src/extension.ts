@@ -1289,6 +1289,20 @@ export async function activate(context: vscode.ExtensionContext) {
         void buildRomfsIndex();
         void buildCanonicalIndex();
         void importKnownProjectCanonicalPaths();
+
+        const tkmmPrompted = context.globalState.get<boolean>('totk-editor.hasPromptedTKMMImport');
+        if (!tkmmPrompted) {
+            void context.globalState.update('totk-editor.hasPromptedTKMMImport', true);
+            void vscode.window.showInformationMessage(
+                'TOTK Editor: Would you like to import your existing projects from TKMM?',
+                'Yes',
+                'No'
+            ).then(choice => {
+                if (choice === 'Yes') {
+                    void vscode.commands.executeCommand('totk-editor.importTKMMProjects');
+                }
+            });
+        }
     }).catch(async (err) => {
         logger.error('Error in background Python setup:', err as Error);
         await promptPythonSetup(context);
