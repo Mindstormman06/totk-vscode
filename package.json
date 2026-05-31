@@ -373,6 +373,10 @@
         "title": "TOTK: Open File (Supported Formats)"
       },
       {
+        "command": "totk-editor.runSetup",
+        "title": "TOTK: Run First-Time Setup (RomFS, Projects, TKMM)"
+      },
+      {
         "command": "totk-editor.setupPython",
         "title": "TOTK: Set Up Python Environment"
       },

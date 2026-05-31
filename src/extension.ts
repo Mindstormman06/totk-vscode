@@ -745,6 +745,12 @@ export async function activate(context: vscode.ExtensionContext) {
                 await promptPythonSetup(context);
             }
         }),
+        vscode.commands.registerCommand('totk-editor.runSetup', async () => {
+            await context.globalState.update('totk-editor.hasPromptedRomfsPath', false);
+            await context.globalState.update('totk-editor.hasPromptedProjectsPath', false);
+            await context.globalState.update('totk-editor.hasPromptedTKMMImport', false);
+            void runFirstTimeSetup(context);
+        }),
         vscode.commands.registerCommand('totk-editor.pickPython', () => pickDetectedPython(context)),
         vscode.commands.registerCommand('totk-editor.browsePython', () => browseForPython(context)),
     );
@@ -1501,25 +1507,55 @@ export async function activate(context: vscode.ExtensionContext) {
 async function runFirstTimeSetup(context: vscode.ExtensionContext): Promise<void> {
     const romfsPathPrompted = context.globalState.get<boolean>('totk-editor.hasPromptedRomfsPath');
     if (!romfsPathPrompted) {
-        void context.globalState.update('totk-editor.hasPromptedRomfsPath', true);
-        const pathChoice = await vscode.window.showInformationMessage(
-            'TOTK Editor: Please select your RomFS (game dump) directory.',
-            'Browse',
-            'Skip'
-        );
-        if (pathChoice === 'Browse') {
-            const folderUri = await vscode.window.showOpenDialog({
-                canSelectFiles: false,
-                canSelectFolders: true,
-                canSelectMany: false,
-                openLabel: 'Select RomFS Folder'
-            });
-            if (folderUri && folderUri.length > 0) {
-                const config = vscode.workspace.getConfiguration('totk-editor');
-                await config.update('romfsPath', folderUri[0].fsPath, vscode.ConfigurationTarget.Global);
-                void vscode.window.showInformationMessage(`TOTK Editor: RomFS path set to ${folderUri[0].fsPath}`);
+        let validRomfsSelected = false;
+        while (!validRomfsSelected) {
+            const pathChoice = await vscode.window.showInformationMessage(
+                'TOTK Editor: Please select your RomFS (game dump) directory.',
+                'Browse',
+                'Skip'
+            );
+            if (pathChoice === 'Browse') {
+                const folderUri = await vscode.window.showOpenDialog({
+                    canSelectFiles: false,
+                    canSelectFolders: true,
+                    canSelectMany: false,
+                    openLabel: 'Select RomFS Folder'
+                });
+                if (folderUri && folderUri.length > 0) {
+                    const fsPath = folderUri[0].fsPath;
+                    const folderName = path.basename(fsPath).toLowerCase();
+                    
+                    if (folderName === 'romfs') {
+                        const config = vscode.workspace.getConfiguration('totk-editor');
+                        await config.update('romfsPath', fsPath, vscode.ConfigurationTarget.Global);
+                        void vscode.window.showInformationMessage(`TOTK Editor: RomFS path set to ${fsPath}`);
+                        validRomfsSelected = true;
+                    } else {
+                        try {
+                            const entries = await vscode.workspace.fs.readDirectory(folderUri[0]);
+                            const hasRomfs = entries.some(([name, type]) => type === vscode.FileType.Directory && name.toLowerCase() === 'romfs');
+                            if (hasRomfs) {
+                                const newPath = path.join(fsPath, 'romfs');
+                                const config = vscode.workspace.getConfiguration('totk-editor');
+                                await config.update('romfsPath', newPath, vscode.ConfigurationTarget.Global);
+                                void vscode.window.showInformationMessage(`TOTK Editor: RomFS path set to ${newPath}`);
+                                validRomfsSelected = true;
+                                continue;
+                            }
+                        } catch {
+                            // ignore
+                        }
+                        
+                        await vscode.window.showWarningMessage('TOTK Editor: The selected directory must be named "romfs" or contain a "romfs" folder. Please choose a different directory.', { modal: true });
+                    }
+                } else {
+                    break;
+                }
+            } else {
+                break;
             }
         }
+        void context.globalState.update('totk-editor.hasPromptedRomfsPath', true);
     }
 
     const projectsPathPrompted = context.globalState.get<boolean>('totk-editor.hasPromptedProjectsPath');
