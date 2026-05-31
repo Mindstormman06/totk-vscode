@@ -274,6 +274,11 @@
         "icon": "./icons/canon_inactive.svg"
       },
       {
+        "command": "totk-editor.setLogicalProjectRoot",
+        "title": "Set Project Root",
+        "icon": "$(star-empty)"
+      },
+      {
         "command": "totk-editor.removeArchiveRoot",
         "title": "Remove from Projects"
       },
@@ -511,8 +516,13 @@
           "when": "view == totk-editor.archives && viewItem == archiveRoot"
         },
         {
+          "command": "totk-editor.setLogicalProjectRoot",
+          "when": "view == totk-editor.archives && viewItem == archiveProjectDir",
+          "group": "1_active@1"
+        },
+        {
           "command": "totk-editor.setActiveProject",
-          "when": "view == totk-editor.archives && viewItem == archiveRoot",
+          "when": "view == totk-editor.archives && (viewItem == archiveRoot || viewItem == archiveProjectDir || viewItem == archiveProjectDirActive)",
           "group": "1_active"
         },
         {

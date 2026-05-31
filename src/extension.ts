@@ -1486,7 +1486,7 @@ export async function activate(context: vscode.ExtensionContext) {
         });
 
         if (fileUri?.[0]) {
-            archiveTree.addRoot(fileUri[0]);
+            await archiveTree.addRoot(fileUri[0]);
             void focusArchiveSidebar();
         }
     });

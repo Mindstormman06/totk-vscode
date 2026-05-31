@@ -1288,7 +1288,7 @@ export function registerArchiveFileCommands(context: vscode.ExtensionContext): v
         let current = diskArchive;
         while (current) {
             try {
-                if (fs.existsSync(path.join(current, 'options')) || fs.existsSync(path.join(current, '.tkproj'))) {
+                if (fs.existsSync(path.join(current, 'options')) || fs.existsSync(path.join(current, '.tkproj')) || fs.existsSync(path.join(current, 'romfs')) || fs.existsSync(path.join(current, 'exefs'))) {
                     projectRoot = current;
                     foundRoot = true;
                     break;
@@ -1302,7 +1302,7 @@ export function registerArchiveFileCommands(context: vscode.ExtensionContext): v
         }
 
         if (!foundRoot) {
-            void vscode.window.showErrorMessage('Add to Option requires the project to have an "options" folder or ".tkproj" file.');
+            void vscode.window.showErrorMessage('Add to Option requires the project to be a valid mod folder (must contain romfs, exefs, or .tkproj).');
             return;
         }
 
