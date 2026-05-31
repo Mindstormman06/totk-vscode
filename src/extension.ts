@@ -1218,7 +1218,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 );
                 if (isBntxTextureResult(raw)) {
                     const texName = raw.metadata?.name ?? filePath.split('/').pop() ?? 'texture';
-                    openTextureViewer(texName, raw, diskArchive, filePath, async (data) => {
+                    const isReadOnly = uri.scheme === 'totk-dump' || uri.scheme === 'sarc-dump';
+                    const onSaveCallback = isReadOnly ? undefined : async (data: any) => {
                         const payloadStr = JSON.stringify(data);
                         const updateArgs = isTxtgFile(uri.fsPath)
                             ? ['update-txtg-metadata', diskArchive, filePath, payloadStr]
@@ -1236,7 +1237,8 @@ export async function activate(context: vscode.ExtensionContext) {
                         
                         // Automatically refresh the texture viewer to show the applied changes
                         void vscode.commands.executeCommand('totk-editor.openBntxTexture', uri);
-                    });
+                    };
+                    openTextureViewer(texName, raw, diskArchive, filePath, onSaveCallback);
                 } else {
                     void vscode.window.showErrorMessage('Failed to load texture preview.');
                 }
